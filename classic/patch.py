@@ -75,3 +75,10 @@ one4("AIM.set(i,a,o,t)}","AIM.set(_n,a,o,t)}")
 one4("e(\"#range\").textContent=`~${Math.round(Ko(ro()))} m`","e(\"#range\").textContent=`~${Math.round(Ko(updateArc.el??ro()))} m`")
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('smooth ok')
+
+# ---------------- old landing ring must never show (it defaulted to the ship's centre during the deploy intro) ----------------
+s=open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html').read()
+assert s.count('jo.rotation.x=-Math.PI/2,y.add(jo);')==1
+s=s.replace('jo.rotation.x=-Math.PI/2,y.add(jo);','jo.rotation.x=-Math.PI/2,y.add(jo),jo.visible=_o.visible=!1;')
+open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
+print('ring ok')
