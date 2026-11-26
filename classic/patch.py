@@ -18,7 +18,7 @@ one('function placeTarget(e){const t=a(0,s),n=a(90,240);e.x=wt.x+Math.cos(t)*n,e
     'function placeTarget(e){for(let k=0;k<12;k++){const t=a(0,s),n=a(90,240);if(e.x=wt.x+Math.cos(t)*n,e.z=wt.y+Math.sin(t)*n,!RKS.inRock(e.x,e.z,30))break}e.alive=!0')
 # debug hook only with ?debug
 one('const i=updateShip(s);RKS.collide(s);','const i=updateShip(s);RKS.collide(s);if(DBG)DBG(s);')
-s=s.replace(';'+rk, ';'+rk+'\nconst DBG=/[?&]debug/.test(location.search)?(dt)=>{window.__rk={RKS,wt,get h(){return Mn},set h(q){Mn=q},get sp(){return Rn},set sp(q){Rn=q},get hp(){return yn},get mode(){return dn},cam:v,ren:f,renderer:f,get wake(){return WAKE},get orbit(){return fn},get ft(){return ft},get jo(){return jo}}}:null;\n',1)
+s=s.replace(';'+rk, ';'+rk+'\nconst DBG=/[?&]debug/.test(location.search)?(dt)=>{window.__rk={RKS,wt,get h(){return Mn},set h(q){Mn=q},get sp(){return Rn},set sp(q){Rn=q},get hp(){return yn},get mode(){return dn},cam:v,ren:f,renderer:f,get wake(){return WAKE},get orbit(){return fn},get ft(){return ft},get jo(){return jo},get gull(){return GULL}}}:null;\n',1)
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('ok',len(s))
 
@@ -82,3 +82,18 @@ assert s.count('jo.rotation.x=-Math.PI/2,y.add(jo);')==1
 s=s.replace('jo.rotation.x=-Math.PI/2,y.add(jo);','jo.rotation.x=-Math.PI/2,y.add(jo),jo.visible=_o.visible=!1;')
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('ring ok')
+
+# ---------------- seagulls: Dayvable's "Seagull" (CC-BY-4.0), GPU-skinned instances ----------------
+s=open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html').read()
+def one5(a,b):
+    global s
+    assert s.count(a)==1,a[:80]
+    s=s.replace(a,b)
+GD=open('/home/claude/mp/gulldata.js').read();GJ=open('/home/claude/mp/gull.js').read()
+one5("for(const Fr of[Rt,St,Ht])Fr.frustumCulled=!1,y.add(Fr);","for(const Fr of[Rt,St,Ht])Fr.frustumCulled=!1,y.add(Fr),Fr.visible=!1;\n"+GD+GJ+"\n")
+one5("Rt.setMatrixAt(o,At);","Rt.setMatrixAt(o,At);GULL.inst(o,At,s,e);")
+one5("Rt.instanceMatrix.needsUpdate=St.instanceMatrix.needsUpdate=Ht.instanceMatrix.needsUpdate=!0}","GULL.done()}")
+one5('<div class="chips" style="margin-top:8px"><span>Best with headphones · A/D steer · W/S sails · click to fire</span></div>',
+     '<div class="chips" style="margin-top:8px"><span>Best with headphones · A/D steer · W/S sails · click to fire</span></div>\n  <div class="chips" style="margin-top:6px;opacity:.55;font-size:11px"><span>Seagull model: “Seagull” by <a href="https://sketchfab.com/Dayvable" target="_blank" rel="noopener" style="color:inherit">Dayvable</a>, <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener" style="color:inherit">CC BY 4.0</a></span></div>')
+open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
+print('gull ok')
