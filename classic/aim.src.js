@@ -23,7 +23,12 @@ const bm=new THREE.ShaderMaterial({uniforms:U,transparent:true,depthWrite:false,
   fragmentShader:`uniform float uTime,uA;uniform vec3 uCol;varying vec2 vU;void main(){float x=abs(vU.x-0.5)*2.0;
     float a=exp(-x*x*7.0)*pow(1.0-vU.y,1.6)*(0.55+0.25*sin(uTime*4.0))*uA;gl_FragColor=vec4(uCol*a*1.6,a);`+S+"}"});
 const beam=new THREE.Mesh((()=>{const q=new THREE.PlaneGeometry(1.6,26,1,4);q.translate(0,13,0);return q})(),bm);beam.frustumCulled=false;beam.renderOrder=3;beam.visible=false;y.add(beam);
-function show(on){arc.visible=beam.visible=on;if(!on)ft.uAim.value.w=0}
+/* switching sides: the old side fades out quickly, then the new side fades in */
+let ds=null,fa=0;
+function side(target,dt){if(ds===null)ds=target;
+  if(target!==ds){fa-=dt/.14;if(fa<=0){fa=0;ds=target}}else fa=Math.min(1,fa+dt/.35);
+  return ds}
+function show(on){arc.visible=beam.visible=on;if(!on){ft.uAim.value.w=0;fa=0;ds=null}}
 function set(n,land,ready,side){
   if(n<2){arc.visible=false;return}
   let s=0;for(let i=0;i<n;i++){const o=i*3,px=Uo[o],py=Uo[o+1],pz=Uo[o+2];
@@ -32,10 +37,10 @@ function set(n,land,ready,side){
     for(let k=0;k<2;k++){const v=i*2+k;pos[v*3]=px;pos[v*3+1]=py;pos[v*3+2]=pz;tan[v*3]=tx;tan[v*3+1]=ty;tan[v*3+2]=tz;at[v*2]=s;at[v*2+1]=k?1:-1}}
   g.attributes.position.needsUpdate=g.attributes.aTan.needsUpdate=g.attributes.aT.needsUpdate=true;g.setDrawRange(0,(n-1)*6);
   const load=sideLoad(side),ok=load>=.999;
-  U.uLen.value=s;U.uA.value=ok?1:.35;U.uCol.value.setRGB(ok?1:.6,ok?.66:.62,ok?.3:.68);
+  U.uLen.value=s;const ease=fa*fa*(3-2*fa);U.uA.value=(ok?1:.35)*ease;U.uCol.value.setRGB(ok?1:.6,ok?.66:.62,ok?.3:.68);
   /* landing zone: a circle that grows with range, as longer shots scatter more */
   const range=Math.hypot(land.x,land.z),fx=-Math.sin(Mn),fz=-Math.cos(Mn);
   beam.position.set(land.x,waveH(land.x,land.z,kn),land.z);
-  ft.uAim.value.set(land.x,land.z,load,1);ft.uAimAx.value.set(fx,fz);const rad=8+range*.04;ft.uAimR.value.set(rad,rad)}
-return{show,set};
+  ft.uAim.value.set(land.x,land.z,load,Math.max(.001,ease));ft.uAimAx.value.set(fx,fz);const rad=8+range*.04;ft.uAimR.value.set(rad,rad)}
+return{show,set,side};
 })();
