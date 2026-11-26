@@ -18,7 +18,7 @@ one('function placeTarget(e){const t=a(0,s),n=a(90,240);e.x=wt.x+Math.cos(t)*n,e
     'function placeTarget(e){for(let k=0;k<12;k++){const t=a(0,s),n=a(90,240);if(e.x=wt.x+Math.cos(t)*n,e.z=wt.y+Math.sin(t)*n,!RKS.inRock(e.x,e.z,30))break}e.alive=!0')
 # debug hook only with ?debug
 one('const i=updateShip(s);RKS.collide(s);','const i=updateShip(s);RKS.collide(s);if(DBG)DBG(s);')
-s=s.replace(';'+rk, ';'+rk+'\nconst DBG=/[?&]debug/.test(location.search)?(dt)=>{window.__rk={RKS,wt,get h(){return Mn},set h(q){Mn=q},get sp(){return Rn},set sp(q){Rn=q},get hp(){return yn},get mode(){return dn},cam:v,ren:f,renderer:f,get wake(){return WAKE}}}:null;\n',1)
+s=s.replace(';'+rk, ';'+rk+'\nconst DBG=/[?&]debug/.test(location.search)?(dt)=>{window.__rk={RKS,wt,get h(){return Mn},set h(q){Mn=q},get sp(){return Rn},set sp(q){Rn=q},get hp(){return yn},get mode(){return dn},cam:v,ren:f,renderer:f,get wake(){return WAKE},get orbit(){return fn}}}:null;\n',1)
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('ok',len(s))
 
@@ -44,3 +44,20 @@ WK=open('/home/claude/mp/wake.js').read()
 one2("function updatePeers(e,o,a){",WK+"\nft.uWakeR.value=WAKE.RES;\nfunction updatePeers(e,o,a){")
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('wake ok')
+
+# ---------------- cannon aim: tracer arc + landing zone painted into the sea ----------------
+s=open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html').read()
+def one3(a,b):
+    global s
+    assert s.count(a)==1,a[:80]
+    s=s.replace(a,b)
+one3("uWake:{value:null},","uWake:{value:null},uAim:{value:new THREE.Vector4},uAimAx:{value:new THREE.Vector2(0,-1)},uAimR:{value:new THREE.Vector2(12,5)},")
+one3("uniform sampler2D uWake;","uniform vec4 uAim;uniform vec2 uAimAx,uAimR;uniform sampler2D uWake;")
+RET=r"""    if(uAim.w>0.5){\n      vec2 r=vWorld.xz-uAim.xy;vec2 lc=vec2(dot(r,uAimAx),dot(r,vec2(-uAimAx.y,uAimAx.x)));\n      float e=length(lc/uAimR),lw=0.016+dist*0.00005;\n      float ang=atan(lc.y,lc.x)/6.28318+0.5;\n      float rdy=step(0.999,uAim.z);\n      float ring=1.0-smoothstep(lw*0.4,lw*1.4,abs(e-1.0));\n      float dash=smoothstep(0.25,0.4,fract(ang*36.0-uTime*0.15))*smoothstep(0.95,0.8,fract(ang*36.0-uTime*0.15));\n      float filled=step(ang,uAim.z);\n      float inner=(1.0-smoothstep(lw*0.3,lw*1.0,abs(e-0.5)))*0.35*step(0.5,fract(ang*12.0));\n      float pp=fract(uTime*0.55);float pulse=(1.0-smoothstep(0.0,lw*1.6,abs(e-pp)))*(1.0-pp)*0.6*rdy;\n      float fill=0.0;\n      float dot0=(1.0-smoothstep(0.02,0.045,e));\n      float A=ring*mix(0.25,1.0,dash*filled)+inner+pulse+fill+dot0*0.8;\n      vec3 ac=mix(vec3(0.62,0.64,0.7),vec3(1.0,0.72,0.36),mix(0.25,1.0,rdy));\n      col=mix(col,ac*(0.7+1.1*uSunI),clamp(A,0.0,1.0)*0.8);\n    }\n"""
+one3(r"    vec3 hz=skyBase(normalize(vec3(-V.x,0.0,-V.z)));\n    float fog=1.0-exp(-dist*0.00045);",RET+r"    vec3 hz=skyBase(normalize(vec3(-V.x,0.0,-V.z)));\n    float fog=1.0-exp(-dist*0.00045);")
+one3("if(_o.visible=jo.visible=e,!e)return;","if(_o.visible=jo.visible=!1,AIM.show(e),!e)return;")
+one3("$o.color.set(o?16765578:11575440)}","$o.color.set(o?16765578:11575440),AIM.set(i,a,o,t)}")
+AJ=open('/home/claude/mp/aim.js').read()
+one3("function updateArc(){",AJ+"\nfunction updateArc(){")
+open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
+print('aim ok')
