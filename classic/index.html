@@ -861,7 +861,7 @@ let TP=!1,hopK=0;
 const hop=(ph,k)=>Math.abs(Math.sin(ph))*.13*k;
 const lerpA=(a,b,k)=>a+(((b-a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI)*k;
 function update(dt){
-  if(pn==="walk"){hopK=hn.bobAmt;me.position.set(hn.x,hn.y+hop(hn.bob,hopK),hn.z);me.rotation.y=hn.yaw+Math.PI;me.visible=TP&&camD>1.1}
+  if(pn==="walk"){hopK=hn.bobAmt;me.position.set(hn.x,hn.y+hop(hn.bob,hopK),hn.z);me.rotation.y=hn.yaw+Math.PI;me.visible=TP&&camD>.9}
   else{me.position.copy(HELM);me.rotation.y=Math.PI;me.visible=pn!=="spy"}
   /* other captains */
   for(const c of Kn.values()){const L=c.snaps;if(!L.length||!c.root.visible||c.dist>700){if(c.av)c.av.visible=!1;continue}
@@ -874,19 +874,25 @@ function update(dt){
     c.av.userData.by=base+(ty-base)*k;c.av.position.set(nx,c.av.userData.by+hop(c.avPh,c.avK),nz);
     c.av.rotation.y=lerpA(c.av.rotation.y,ta,k);c.av.visible=!c.sk||c.sinkT<6}
 }
-/* third person while walking: camera eases back behind the character and pulls in before walls */
-const RC=new THREE.Raycaster,COL=[],V3=new THREE.Vector3,DIR=new THREE.Vector3;let tpd=0;
+/* third person while walking, Roblox-style: the camera orbits the character's head along the look direction.
+   Zoom eases toward the wheel distance; obstacles pull the camera in at once, and it eases back out when clear.
+   All easing is frame-rate independent. */
+const RC=new THREE.Raycaster,COL=[],DIR=new THREE.Vector3,PIV=new THREE.Vector3,SIDE=new THREE.Vector3;
+let zoomT=4.2,zoomC=0,camD=0,lastT=performance.now();
 function cols(){if(!COL.length)pe.traverse(o=>{if(o.isMesh&&!o.userData.noKit&&o.material&&o.material.visible!==!1&&!o.material.transparent)COL.push(o)});return COL}
-let camD=0;
-function tp(e,t){const want=pn==="walk"&&TP?3.1:0;tpd+=(want-tpd)*.18;if(tpd<.02){camD=0;return}
-  /* try a level boom first; if something is behind the character, swing the boom higher instead of jamming into it */
-  let best=null;
-  for(const up of[.42,.85,1.4,2.2]){DIR.set(0,up,1).normalize().applyQuaternion(t);RC.set(e,DIR);RC.far=tpd+.3;const h=RC.intersectObjects(cols(),!1);
-    const d=h.length?Math.max(.3,Math.min(tpd,h[0].distance-.3)):tpd;if(!best||d>best.d+.05)best={d,x:DIR.x,y:DIR.y,z:DIR.z};if(d>=tpd-.05)break}
-  camD=best.d;const hx=e.x,hy=e.y,hz=e.z;e.x+=best.x*best.d;e.y+=best.y*best.d;e.z+=best.z*best.d;
-  /* look over the character's shoulder at a point ahead of them, so they stay in frame however high the boom swings */
-  FW.set(0,0,-1).applyQuaternion(t);TG.set(hx+FW.x*4.5,hy+FW.y*4.5-.35,hz+FW.z*4.5);LM.lookAt(e,TG,UPV);const q=new THREE.Quaternion().setFromRotationMatrix(LM);t.slerp(q,Math.min(1,tpd/3.1))}
-const FW=new THREE.Vector3,TG=new THREE.Vector3,LM=new THREE.Matrix4,UPV=new THREE.Vector3(0,1,0);
+function clearDist(p,d,max){RC.set(p,d);RC.near=0;RC.far=max+.4;let best=max;
+  const h=RC.intersectObjects(cols(),!1);if(h.length)best=Math.min(best,h[0].distance-.32);return Math.max(.25,best)}
+function tp(e,t){const now=performance.now(),dt=Math.min(.1,(now-lastT)/1e3);lastT=now;
+  const on=pn==="walk"&&TP,want=on?zoomT:0;
+  zoomC+=(want-zoomC)*(1-Math.exp(-dt*(on?7:12)));
+  if(zoomC<.03){zoomC=0;camD=0;return}
+  /* pivot at the head, slightly above eye height so the character sits low in frame */
+  PIV.copy(e);PIV.y+=.18;
+  DIR.set(0,0,1).applyQuaternion(t);
+  const free=clearDist(PIV,DIR,zoomC),target=Math.min(zoomC,free);
+  camD=target<camD?target:camD+(target-camD)*(1-Math.exp(-dt*5));
+  e.copy(PIV).addScaledVector(DIR,camD)}
+addEventListener("wheel",ev=>{if(pn!=="walk"||!TP||dn!=="play")return;zoomT=Math.max(1.4,Math.min(9,zoomT*(ev.deltaY>0?1.12:1/1.12)))},{passive:!0});
 addEventListener("keydown",ev=>{if(ev.code!=="KeyV"||ev.repeat||(ev.target&&/INPUT|TEXTAREA/.test(ev.target.tagName)))return;
   if(pn==="walk"&&dn==="play"){TP=!TP;say(TP?"Third person. Press V to look through your own eyes again.":"First person.",1.8)}});
 return{update,tp,me,get tp3(){return TP},set tp3(v){TP=v}};
