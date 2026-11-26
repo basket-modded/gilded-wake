@@ -33,9 +33,9 @@ function set(n,land,ready,side){
   g.attributes.position.needsUpdate=g.attributes.aTan.needsUpdate=g.attributes.aT.needsUpdate=true;g.setDrawRange(0,(n-1)*6);
   const load=sideLoad(side),ok=load>=.999;
   U.uLen.value=s;U.uA.value=ok?1:.35;U.uCol.value.setRGB(ok?1:.6,ok?.66:.62,ok?.3:.68);
-  /* landing zone: broadside spread is long along the ship and short in range */
+  /* landing zone: a circle that grows with range, as longer shots scatter more */
   const range=Math.hypot(land.x,land.z),fx=-Math.sin(Mn),fz=-Math.cos(Mn);
   beam.position.set(land.x,waveH(land.x,land.z,kn),land.z);
-  ft.uAim.value.set(land.x,land.z,load,1);ft.uAimAx.value.set(fx,fz);ft.uAimR.value.set(12+range*.02,4.5+range*.055)}
+  ft.uAim.value.set(land.x,land.z,load,1);ft.uAimAx.value.set(fx,fz);const rad=8+range*.04;ft.uAimR.value.set(rad,rad)}
 return{show,set};
 })();
