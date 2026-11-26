@@ -100,3 +100,6 @@ print('gull ok')
 
 # ---------------- deck: bell, lanterns, cabin interior ----------------
 exec(open('/home/claude/mp/deck_patch.py').read())
+
+# ---------------- deck seams and z-fighting ----------------
+exec(open('/home/claude/mp/seam_patch.py').read())
