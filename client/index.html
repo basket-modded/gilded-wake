@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Gilded Wake — a pirate sandbox</title>
+<meta name="description" content="A multiplayer pirate sandbox: sail, trade, fight, dig for treasure and build a stronghold.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: hushed, cinematic, solitary — a ship's evening, not a game menu.
+   IDEA: a captain's logbook and brass instruments laid over a living sunset sea.
+   PICTURE: the full-bleed real-time 3D scene is the whole page.
+   COLOUR and TYPE: sunset cream #f6e7c8 and brass #e8b45f over the scene; IM Fell English for voice, Inter for settings.
+   LAYOUT: letterboxed title bottom-left; minimal HUD; one calm settings panel. */
+:root{--ink:#f6e7c8;--brass:#e8b45f;--panel:rgba(20,12,9,.82);--line:rgba(232,180,95,.28)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:#120a08;overflow:hidden;color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;-webkit-user-select:none;user-select:none;touch-action:none}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+.fell{font-family:"IM Fell English",Georgia,serif}
+#vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 48%,transparent 55%,rgba(18,6,2,.45) 100%)}
+.bar{position:fixed;left:0;right:0;height:11vh;background:#050302;transition:transform 2.4s cubic-bezier(.6,0,.2,1);pointer-events:none;z-index:3}
+#barT{top:0}#barB{bottom:0}
+body.playing #barT{transform:translateY(-100%)}body.playing #barB{transform:translateY(100%)}
+#title{position:fixed;left:max(6vw,20px);bottom:calc(11vh + 5vh);z-index:4;max-width:620px;transition:opacity 1.6s,transform 2s}
+body.playing #title{opacity:0;transform:translateY(20px);pointer-events:none}
+#title h1{font-family:"IM Fell English SC",Georgia,serif;font-weight:400;font-size:clamp(40px,7vw,84px);line-height:1;margin:0 0 .15em;letter-spacing:.01em;text-shadow:0 2px 30px rgba(60,20,0,.6)}
+#title p{font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:clamp(17px,2vw,22px);margin:0 0 1.4em;opacity:.9;text-shadow:0 1px 12px rgba(0,0,0,.6)}
+.btn{font:500 16px Inter,sans-serif;color:#1d0f06;background:linear-gradient(#f3c877,#d99a42);border:0;border-radius:999px;padding:14px 30px;min-height:48px;cursor:pointer;box-shadow:0 6px 30px rgba(230,140,40,.35),inset 0 1px 0 rgba(255,255,255,.5);transition:transform .2s,box-shadow .2s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 10px 40px rgba(240,150,50,.5)}
+.btn:focus-visible,.chip:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #fff3d6;outline-offset:3px}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:18px;align-items:center;font-size:13px;opacity:.85}
+.chip{font:500 13px Inter,sans-serif;color:var(--ink);background:rgba(20,10,6,.45);border:1px solid var(--line);border-radius:999px;padding:6px 12px;min-height:32px;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--brass);color:#1d0f06;border-color:var(--brass)}
+#loading{position:fixed;inset:0;display:grid;place-items:center;z-index:9;background:#120a08;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:20px;transition:opacity 1.2s}
+#loading.gone{opacity:0;pointer-events:none}
+/* HUD */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;transition:opacity 1.5s}
+body.playing #hud{opacity:1}body.nohud #hud>*:not(#spy):not(#note){visibility:hidden}
+#cross{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:rgba(255,244,220,.75);box-shadow:0 0 6px rgba(0,0,0,.6);transition:all .18s}
+#prompt{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);font-family:"IM Fell English",Georgia,serif;font-size:19px;white-space:nowrap;text-shadow:0 1px 8px #000,0 0 2px #000;opacity:0;transition:opacity .2s}
+#prompt.on{opacity:1}
+kbd{font:600 12px Inter,sans-serif;display:inline-block;min-width:22px;padding:2px 6px;margin-right:8px;border-radius:5px;background:rgba(255,240,210,.9);color:#2a1607;text-align:center;vertical-align:2px}
+#sub{position:absolute;left:50%;bottom:9vh;transform:translateX(-50%);max-width:min(760px,90vw);text-align:center;font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:clamp(17px,2vw,21px);text-shadow:0 1px 10px #000,0 0 3px #000;opacity:0;transition:opacity .8s}
+#sub.on{opacity:1}
+#hint{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);font-size:13px;opacity:.0;white-space:nowrap;transition:opacity 1.2s;text-shadow:0 1px 6px #000}
+#hint.on{opacity:.8}
+#compass{position:absolute;left:50%;top:22px;transform:translateX(-50%);width:min(440px,80vw);height:46px;overflow:hidden;opacity:0;transition:opacity .6s;-webkit-mask-image:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent);mask-image:linear-gradient(90deg,transparent,#000 25%,#000 75%,transparent)}
+#compass.on{opacity:1}
+#ctape{position:absolute;top:0;left:0;height:100%;white-space:nowrap;font-family:"IM Fell English SC",Georgia,serif;font-size:18px;text-shadow:0 1px 6px #000}
+#ctape span{display:inline-block;width:40px;text-align:center}
+#cneedle{position:absolute;left:50%;top:28px;width:2px;height:14px;margin-left:-1px;background:var(--brass)}
+#helmtip{position:absolute;left:50%;top:76px;transform:translateX(-50%);font-size:13px;opacity:0;transition:opacity .6s;text-shadow:0 1px 6px #000;white-space:nowrap}
+#helmtip.on{opacity:.85}
+#spy{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .5s;background:radial-gradient(circle at 50% 50%,transparent 0,transparent min(36vw,36vh),rgba(0,0,0,.6) calc(min(36vw,36vh) + 4px),#000 calc(min(36vw,36vh) + 22px))}
+#spy.on{opacity:1}
+#fps{position:absolute;right:12px;top:10px;font:12px/1.3 ui-monospace,Menlo,monospace;opacity:.75;text-shadow:0 1px 3px #000;display:none;text-align:right}
+/* parchment note */
+#note{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity .5s;z-index:6;background:rgba(10,5,2,.35)}
+#note.on{opacity:1;pointer-events:auto}
+#paper{width:min(560px,92vw);max-height:84vh;overflow:auto;padding:38px 42px 30px;color:#2d1d0e;background:radial-gradient(ellipse at 50% 40%,#f1e1bb,#dcc28f 80%,#c9a86e);border-radius:3px;box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 0 60px rgba(120,70,20,.35);font-family:"IM Fell English",Georgia,serif;font-size:19px;line-height:1.55;transform:rotate(-.6deg)}
+#paper h2{font-family:"IM Fell English SC",Georgia,serif;font-weight:400;font-size:28px;margin:0 0 .5em}
+#paper p{margin:0 0 .8em}
+#paper img{display:block;width:100%;border-radius:2px;margin-bottom:12px}
+#paper .close{display:block;margin-top:14px;font:13px Inter,sans-serif;opacity:.65}
+/* menu */
+#menu{position:fixed;inset:0;z-index:7;display:none;place-items:center;background:rgba(10,5,3,.45)}
+#menu.on{display:grid}
+#mpanel{width:min(760px,94vw);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px clamp(18px,3vw,32px);box-shadow:0 30px 90px rgba(0,0,0,.6)}
+#mpanel h2{font-family:"IM Fell English SC",Georgia,serif;font-weight:400;font-size:34px;margin:0 0 4px}
+#mpanel h3{font:600 13px Inter,sans-serif;color:var(--brass);margin:22px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px 26px}
+.f{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 12px;font-size:14px;min-height:36px}
+.f input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--brass);height:22px}
+.f output{font-variant-numeric:tabular-nums;opacity:.75;font-size:13px}
+select{font:14px Inter,sans-serif;color:var(--ink);background:#2a1a12;border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:36px}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--brass)}
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:6px 18px;font-size:14px;opacity:.9}
+.note{font-size:12.5px;opacity:.6;margin-top:6px}
+/* touch */
+#touch{position:fixed;inset:0;z-index:2;display:none;pointer-events:none}
+body.touch.playing #touch{display:block}
+#stick{position:absolute;left:28px;bottom:34px;width:130px;height:130px;border-radius:50%;border:1.5px solid rgba(255,240,210,.35);background:rgba(20,10,5,.18);pointer-events:auto}
+#knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px;border-radius:50%;background:rgba(255,240,210,.35)}
+.tbtn{position:absolute;pointer-events:auto;border-radius:999px;border:1px solid var(--line);background:rgba(20,10,5,.5);color:var(--ink);font:600 14px Inter,sans-serif;min-height:48px;padding:0 18px}
+#tUse{right:28px;bottom:60px;display:none}#tMenu{right:16px;top:14px;min-height:40px}
+#cross.hov{width:22px;height:22px;margin:-11px;background:transparent;border:1.5px solid rgba(255,236,200,.95)}
+#cross.on{animation:pulse .35s ease-out}@keyframes pulse{50%{transform:scale(1.6);opacity:.4}}
+body.captain #cross{display:none}
+#prompt small{display:block;text-align:center;font:500 12px Inter,sans-serif;opacity:.75;margin-top:2px}
+.field{display:flex;gap:10px;align-items:center;margin:0 0 14px}
+#name{font:500 16px Inter,sans-serif;color:var(--ink);background:rgba(20,10,6,.55);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-height:44px;width:min(260px,70vw)}
+#netT{font-size:13px;opacity:.85;margin-top:10px;text-shadow:0 1px 6px #000}#netT a{color:var(--brass)}
+#cap{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:none;gap:18px;align-items:stretch;padding:10px 16px;border-radius:14px;background:rgba(18,10,7,.55);border:1px solid var(--line);font-size:12px;white-space:nowrap}
+body.captain #cap{display:flex}
+#cap .g{display:flex;flex-direction:column;gap:5px;justify-content:center;min-width:0}
+#cap .lab{opacity:.65;font-size:11px}
+#cap .big{font:600 22px/1 Inter,sans-serif;font-variant-numeric:tabular-nums}
+#pips{display:flex;gap:5px}#pips i{width:16px;height:9px;border-radius:3px;background:rgba(255,240,210,.2)}#pips i.on{background:var(--brass)}
+.rud{position:relative;width:110px;height:8px;border-radius:4px;background:rgba(255,240,210,.18)}#rudK{position:absolute;top:-3px;width:4px;height:14px;margin-left:-2px;border-radius:2px;background:#fff3dc}
+.gun{opacity:.55}.gun.aim{opacity:1}.gun .bar2{width:96px;height:7px;border-radius:4px;background:rgba(255,240,210,.15);overflow:hidden}.gun .bar2 i{display:block;height:100%;background:#b0a090}.gun.ready .bar2 i{background:var(--brass)}
+#hull{position:absolute;left:18px;bottom:22px;display:flex;align-items:center;gap:8px;font-size:12px;text-shadow:0 1px 4px #000}#hull .bar2{width:130px;height:8px;border-radius:4px;background:rgba(0,0,0,.4);overflow:hidden}#hpB{display:block;height:100%}
+#roster{position:absolute;right:14px;top:14px;display:grid;gap:4px;font-size:12px;max-width:min(330px,60vw)}
+.rr{display:grid;grid-template-columns:10px minmax(0,1fr) auto 46px;gap:7px;align-items:center;padding:3px 9px;border-radius:8px;background:rgba(18,10,7,.45);text-shadow:0 1px 3px #000}
+.rr i{width:9px;height:9px;border-radius:50%}.rr span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rr b{font-weight:500;opacity:.8}.rr em{height:5px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}.rr u{display:block;height:100%;background:#7fd18b;text-decoration:none}.rr small{display:none}
+#roster.big{top:50%;right:50%;transform:translate(50%,-50%);font-size:15px;max-width:none;width:min(520px,92vw);padding:16px;border-radius:14px;background:rgba(18,10,7,.82);border:1px solid var(--line)}
+#roster.big .rr{grid-template-columns:12px minmax(0,1fr) auto 80px 60px;padding:8px 12px}#roster.big .rr small{display:block;opacity:.6;text-align:right}
+.rh{opacity:.6;padding:0 4px}
+#net{position:absolute;left:16px;top:14px;font-size:12px;opacity:.7;text-shadow:0 1px 4px #000}
+#feed{position:absolute;left:16px;top:38px;display:grid;gap:4px;max-width:min(420px,70vw)}
+#feed div{font-size:13px;padding:4px 10px;border-left:3px solid var(--brass);background:rgba(18,10,7,.5);border-radius:0 8px 8px 0;text-shadow:0 1px 3px #000;transition:opacity 1s}#feed div.out{opacity:0}
+#dmg{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(160,20,0,.55))}#dmg.on{animation:dmg .7s ease-out}@keyframes dmg{0%{opacity:1}100%{opacity:0}}
+#hitm{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px;opacity:0;pointer-events:none;background:linear-gradient(45deg,transparent 46%,#fff3dc 46%,#fff3dc 54%,transparent 54%),linear-gradient(-45deg,transparent 46%,#fff3dc 46%,#fff3dc 54%,transparent 54%)}#hitm.on{animation:hitm .45s ease-out}@keyframes hitm{0%{opacity:1;transform:scale(.7)}100%{opacity:0;transform:scale(1.3)}}
+#banner{position:fixed;left:50%;top:30%;transform:translateX(-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1s;z-index:4}#banner.on{opacity:1}
+#banner h3{font-family:"IM Fell English SC",Georgia,serif;font-weight:400;font-size:clamp(30px,5vw,50px);margin:0;text-shadow:0 2px 20px #000}#banner p{font-family:"IM Fell English",Georgia,serif;font-style:italic;font-size:19px;margin:6px 0 0;text-shadow:0 1px 10px #000}
+#chat{position:fixed;left:16px;bottom:80px;z-index:6;display:none}#chat.on{display:block}
+#chatin{font:15px Inter,sans-serif;color:var(--ink);background:rgba(18,10,7,.85);border:1px solid var(--brass);border-radius:10px;padding:10px 14px;width:min(420px,80vw);min-height:44px}
+#tFire{right:28px;bottom:130px;display:none}#tMode{right:28px;bottom:190px}#tChat{right:110px;top:14px;min-height:40px}
+body.captain #tFire{display:block}
+@media(max-width:600px){#title{bottom:calc(11vh + 2vh)}.bar{height:8vh}#cap{gap:10px;padding:8px 10px;bottom:auto;top:62px}#cap .rudg{display:none}#roster{display:none}#roster.big{display:grid}}
+@media(prefers-reduced-motion:reduce){.bar,#title{transition:none}}
+
+/* ---- sandbox additions ---- */
+#me{position:absolute;left:18px;bottom:52px;display:grid;gap:5px;font-size:12px;text-shadow:0 1px 4px #000}
+#me .r{display:flex;align-items:center;gap:8px}#me .bar2{width:130px;height:8px;border-radius:4px;background:rgba(0,0,0,.4);overflow:hidden}#phB{display:block;height:100%;background:#e8655f}#brB{display:block;height:100%;background:#7fc7e8}
+#gold{font:600 15px Inter,sans-serif;color:#f3c877}#gw{display:flex;align-items:center;gap:6px}#gw:before{content:"";width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff3c4,#d99a42 60%,#8a5a1a)}
+#hull{bottom:22px}
+body.captain #me{bottom:126px}body.captain #hull{bottom:100px}
+@media(min-width:1500px){body.captain #me{bottom:52px}body.captain #hull{bottom:22px}}#warn{font-size:12px;color:#f0c05a;margin-left:6px}
+#hotbar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:none;gap:5px}
+body.fp #hotbar{display:flex}
+.hs{position:relative;width:62px;height:62px;border-radius:10px;background:rgba(18,10,7,.55);border:1px solid var(--line);display:grid;place-items:center;font-size:10px;text-align:center;padding:4px;overflow:hidden}
+.hs.on{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass),0 0 18px rgba(232,180,95,.35);background:rgba(40,24,12,.7)}
+.hs em{position:absolute;left:5px;top:2px;font-style:normal;opacity:.6}.hs i{position:absolute;right:5px;bottom:2px;font-style:normal;font-weight:600}
+.hs .ic,.slot .ic,.row .ic{font-size:20px;line-height:1}.hs .nm{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:54px;opacity:.85}
+body.fp #sub{bottom:96px}
+#under{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .4s;background:radial-gradient(ellipse at 50% 30%,rgba(40,110,120,.25),rgba(5,30,40,.75));z-index:1}
+#ui{position:fixed;inset:0;z-index:8;display:none;place-items:center;background:rgba(10,5,3,.5)}
+#ui.on{display:grid}
+#upanel{width:min(760px,95vw);max-height:90vh;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.6)}
+#ui.wide #upanel{width:min(1040px,96vw)}
+#uhead{display:flex;align-items:center;gap:12px;padding:18px 22px 8px}
+#uititle{font-family:"IM Fell English SC",Georgia,serif;font-weight:400;font-size:30px;margin:0;flex:1}
+#uiclose{font:600 14px Inter,sans-serif;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:999px;min-height:40px;padding:0 16px;cursor:pointer}
+#uibody{overflow:auto;padding:4px 22px 22px}
+#uibody h4{font:600 13px Inter,sans-serif;color:var(--brass);margin:14px 0 8px}
+#uibody .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px 24px}
+#uibody button{font:500 13px Inter,sans-serif;color:var(--ink);background:rgba(255,240,210,.06);border:1px solid var(--line);border-radius:9px;min-height:36px;padding:6px 10px;cursor:pointer}
+#uibody button:hover:not(:disabled){background:rgba(232,180,95,.18)}
+#uibody button:disabled{opacity:.4;cursor:default}
+#uibody .row{display:flex;width:100%;align-items:center;gap:10px;margin:0 0 5px;text-align:left;flex-wrap:nowrap}
+#uibody .row .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#uibody .row i{opacity:.7}#uibody .row b{font-weight:600;color:#f3c877;white-space:nowrap}
+#uibody .row2{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+#uibody input[type=number]{font:14px Inter,sans-serif;color:var(--ink);background:#2a1a12;border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:36px;width:110px}
+#uibody .muted,.muted{opacity:.62;font-size:12.5px}
+#uibody .purse{margin:4px 0 6px}
+#uibody .card{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:rgba(255,240,210,.03)}
+#uibody .card.sel{border-color:var(--brass);background:rgba(232,180,95,.08)}
+#uibody .ch{margin-bottom:4px}#uibody .stats{font-size:12.5px;opacity:.8;margin-bottom:8px}
+#uibody .ups,#uibody .looks{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;font-size:12px}
+#uibody .sw{width:28px;min-height:28px;height:28px;padding:0;border-radius:50%}#uibody .sw.on,#uibody .fl.on{outline:2px solid #fff3dc;outline-offset:2px}
+#uibody .btn.big{margin-top:14px;width:100%}
+#uibody .grid8{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:5px}
+#uibody .slot{position:relative;aspect-ratio:1;min-height:0;padding:3px;display:grid;place-items:center;font-size:9.5px;overflow:hidden}
+#uibody .slot.hb{border-color:rgba(232,180,95,.55)}#uibody .slot.sel{background:rgba(232,180,95,.3)}#uibody .slot.eq{box-shadow:inset 0 0 0 2px var(--brass)}
+#uibody .slot em{position:absolute;left:4px;top:1px;font-style:normal;opacity:.55}#uibody .slot i{position:absolute;right:4px;bottom:1px;font-style:normal;font-weight:600}
+#uibody .slot .nm{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#uibody .detail{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px}#uibody .detail button{margin-right:6px}
+.pop{position:absolute;left:50%;top:42%;transform:translateX(-50%);font:600 20px Inter,sans-serif;color:#f3c877;text-shadow:0 2px 10px #000;animation:pop 1.6s ease-out forwards}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,10px)}15%{opacity:1}100%{opacity:0;transform:translate(-50%,-50px)}}
+#buildhud{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);font-size:12.5px;text-align:center;padding:6px 14px;border-radius:10px;background:rgba(18,10,7,.6);border:1px solid var(--line);display:none;white-space:nowrap}
+#buildhud.on{display:block}
+#prompt .hold{display:block;width:140px;height:5px;margin:6px auto 0;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}#prompt .hold u{display:block;height:100%;background:var(--brass)}
+#marks{position:absolute;inset:0;display:none;pointer-events:none;overflow:hidden}
+.mk{position:absolute;left:0;top:0;font-size:11.5px;white-space:nowrap;padding:2px 8px;border-left:2px solid var(--brass);background:rgba(18,10,7,.5);text-shadow:0 1px 3px #000;margin:-10px 0 0 4px}
+#ammo,#ammo2{font-size:12px}
+#ammo2{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);display:none;padding:6px 14px;border-radius:10px;background:rgba(18,10,7,.55)}
+body.cannon #ammo2{display:block}
+body.rowboat #cap .gun,body.rowboat #cap .amg{display:none}
+#tInv{right:28px;bottom:250px}#tJump{left:180px;bottom:40px}
+#mfleet{margin-left:4px}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A pirate ship sailing at sunset"></canvas>
+<div id="vig"></div>
+<div class="bar" id="barT"></div><div class="bar" id="barB"></div>
+<div id="loading">Raising the sun…</div>
+
+<section id="title">
+  <h1>The Gilded Wake</h1>
+  <p>Buy a ship, crew her, and make your fortune — in trade, in plunder, or in buried gold. Other captains are out there.</p>
+  <div class="field"><input id="name" maxlength="18" aria-label="Your captain's name" placeholder="Your captain's name" autocomplete="off"></div>
+  <div class="row"><button class="btn" id="board">Take command</button></div>
+  <div id="netT"></div>
+  <div class="chips" id="qchips" role="group" aria-label="Graphics quality"><span>Graphics</span></div>
+  <div class="chips" style="margin-top:8px"><span>Best with headphones · WASD · E to interact · I for your pack</span></div>
+</section>
+
+<div id="hud">
+  <div id="cross"></div>
+  <div id="prompt"></div>
+  <div id="sub"></div>
+  <div id="hint">Mouse aims · click fires the side you face · 1–4 ammunition · R anchor · G grapple · B jolly boat · F walk the deck · T chat · Tab captains</div>
+  <div id="compass"><div id="ctape"></div><div id="cneedle"></div></div>
+  <div id="hitm"></div>
+  <div id="net"></div><div id="feed"></div><div id="roster"></div>
+  <div id="me"><div class="r" id="gw"><span id="gold">0</span></div><div class="r">You<span class="bar2"><i id="phB"></i></span><b id="phV">100</b></div><div class="r" id="breath" style="display:none">Air<span class="bar2"><i id="brB"></i></span></div></div>
+  <div id="hull">Ship<span class="bar2"><i id="hpB"></i></span><b id="hpV">100</b><span id="warn"></span></div>
+  <div id="hotbar"></div><div id="buildhud"></div><div id="marks"></div><div id="ammo2"></div>
+  <div id="cap">
+    <div class="g"><span class="lab">Speed, knots</span><span class="big" id="spd">0.0</span></div>
+    <div class="g"><span class="lab">Sails <kbd>W</kbd><kbd>S</kbd></span><div id="pips"><i></i><i></i></div></div>
+    <div class="g rudg"><span class="lab">Rudder <kbd>A</kbd><kbd>D</kbd></span><div class="rud"><div id="rudK"></div></div></div>
+    <div class="g gun" id="gP"><span class="lab"><kbd>Q</kbd>Port guns</span><span class="bar2"><i id="rlP"></i></span></div>
+    <div class="g gun" id="gS"><span class="lab"><kbd>E</kbd>Starboard guns</span><span class="bar2"><i id="rlS"></i></span></div>
+    <div class="g amg"><span class="lab">Shot <kbd>1</kbd>–<kbd>4</kbd></span><span id="ammo">Round shot</span></div>
+    <div class="g amg"><span class="lab">Aim (mouse)</span><span id="range">~0 m</span></div>
+  </div>
+  <div id="fps"></div>
+</div>
+<div id="under"></div><div id="spy"></div><div id="dmg"></div>
+<div id="ui" role="dialog" aria-label="Trade and inventory"><div id="upanel"><div id="uhead"><h2 id="uititle"></h2><button id="uiclose">Close · Esc</button></div><div id="uibody"></div></div></div>
+<div id="banner"><h3></h3><p></p></div>
+<div id="chat"><input id="chatin" maxlength="100" placeholder="Say something to the other ships…" aria-label="Chat message" autocomplete="off"></div>
+<div id="note"><div id="paper"></div></div>
+
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <button class="tbtn" id="tUse">Interact</button>
+  <button class="tbtn" id="tMenu">Menu</button>
+  <button class="tbtn" id="tFire">Fire</button>
+  <button class="tbtn" id="tMode">Helm / Walk</button>
+  <button class="tbtn" id="tChat">Chat</button>
+  <button class="tbtn" id="tInv">Pack</button>
+  <button class="tbtn" id="tJump">Jump</button>
+</div>
+
+<div id="menu" role="dialog" aria-label="Settings">
+  <div id="mpanel">
+    <h2>Adrift</h2>
+    <div class="row" style="margin:6px 0 4px"><button class="btn" id="resume">Return to the deck</button><button class="btn ghost" id="mfleet">Your fleet</button></div>
+
+    <h3>Graphics</h3>
+    <div class="chips" id="mchips" style="margin-top:0"></div>
+    <div class="grid" style="margin-top:12px">
+      <label class="f">Render scale<output id="o_scale"></output><input type="range" id="s_scale" min="50" max="100" step="5"></label>
+      <label class="f">Adaptive resolution (holds 60 FPS)<input type="checkbox" id="s_adaptive"></label>
+      <label class="f">Shadows<select id="s_shadows"><option value="0">Off</option><option value="1024">Soft</option><option value="2048">Crisp</option><option value="4096">Ultra</option></select></label>
+      <label class="f">Water detail<select id="s_water"><option value="110">Low</option><option value="180">Medium</option><option value="260">High</option><option value="340">Ultra</option></select></label>
+      <label class="f">Lantern lights<select id="s_lights"><option value="2">2 lights</option><option value="4">4 lights</option><option value="6">All 6</option></select></label>
+      <label class="f">Cloud detail<select id="s_clouds"><option value="2">Low</option><option value="3">Medium</option><option value="4">High</option><option value="5">Ultra</option></select></label>
+      <label class="f">Anti-aliasing<input type="checkbox" id="s_aa"></label>
+      <label class="f">Frame rate counter<input type="checkbox" id="s_fps"></label>
+    </div>
+    <p class="note" id="aanote">Anti-aliasing changes take effect the next time the page loads.</p>
+
+    <h3>The sea</h3>
+    <div class="grid">
+      <label class="f">Time of day<select id="s_time"><option value="cycle">Day and night (shared by all)</option><option value="sunset">Endless sunset</option></select></label>
+      <label class="f">Weather: fog, rain and storms<input type="checkbox" id="s_weather"></label>
+      <label class="f">Sun height (endless sunset)<output id="o_sun"></output><input type="range" id="s_sun" min="0.5" max="14" step="0.1"></label>
+      <label class="f">Let the sun set slowly<input type="checkbox" id="s_drift"></label>
+      <label class="f">Sea motion<output id="o_motion"></output><input type="range" id="s_motion" min="0" max="100" step="5"></label>
+      <label class="f">Head bob<input type="checkbox" id="s_bob"></label>
+    </div>
+
+    <h3>Sound and controls</h3>
+    <div class="grid">
+      <label class="f">Volume<output id="o_volume"></output><input type="range" id="s_volume" min="0" max="100" step="1"></label>
+      <label class="f">Mouse sensitivity<output id="o_sens"></output><input type="range" id="s_sens" min="20" max="250" step="5"></label>
+      <label class="f">Field of view<output id="o_fov"></output><input type="range" id="s_fov" min="55" max="95" step="1"></label>
+      <label class="f">Invert vertical look<input type="checkbox" id="s_invert"></label>
+    </div>
+    <h3>Controls</h3>
+    <div class="keys">
+      <div><b>At the helm</b></div><div><kbd>A</kbd><kbd>D</kbd>steer</div><div><kbd>W</kbd><kbd>S</kbd>raise / lower sail</div>
+      <div><kbd>Mouse</kbd>look and aim</div><div><kbd>Click</kbd>or <kbd>Space</kbd>fire facing side</div><div><kbd>Q</kbd><kbd>E</kbd>port / starboard guns</div>
+      <div><kbd>Right-click</kbd>zoom</div><div><kbd>Wheel</kbd>camera distance</div><div><kbd>F</kbd>walk the deck</div>
+      <div><b>On deck</b></div><div><kbd>W A S D</kbd>walk, <kbd>Shift</kbd>hurry</div><div><kbd>E</kbd>or click: interact</div>
+      <div><kbd>F</kbd>back to the helm</div><div><kbd>T</kbd>chat · <kbd>Tab</kbd>captains</div><div><kbd>H</kbd>hide HUD · <kbd>Esc</kbd>menu</div>
+      <div><b>More at the helm</b></div><div><kbd>1</kbd>–<kbd>4</kbd>ball, chain, grape, explosive</div><div><kbd>R</kbd>anchor · <kbd>G</kbd>grapple · <kbd>B</kbd>jolly boat</div>
+      <div><b>On foot</b></div><div><kbd>1</kbd>–<kbd>8</kbd>hotbar · <kbd>Wheel</kbd>cycle</div><div><kbd>Click</kbd>use · <kbd>Right-click</kbd>block / aim</div>
+      <div><kbd>Space</kbd>jump · over the rail to swim</div><div><kbd>C</kbd>dive · <kbd>G</kbd>carry chest</div><div><kbd>I</kbd>pack and crafting · <kbd>Q</kbd>drop</div>
+      <div><kbd>Z</kbd>sit · <kbd>V</kbd>wave · <kbd>N</kbd>dance</div><div>Hammer: <kbd>Wheel</kbd>piece · <kbd>R</kbd>rotate · <kbd>U</kbd>stone</div><div>Hold <kbd>E</kbd>to plunder a strongbox</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/data.js"></script>
+<script src="js/world.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/player.js"></script>
+<script src="js/systems.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
