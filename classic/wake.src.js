@@ -8,7 +8,7 @@ const MAXP=150,SP=2.4,MAXS=340,MAXAGE=75,LOWQ=u().water<150,RES=LOWQ?512:1024,EX
 const RT=new THREE.WebGLRenderTarget(RES,RES,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,depthBuffer:false,stencilBuffer:false});
 const WS=new THREE.Scene,OC=new THREE.OrthographicCamera(-EXT,EXT,EXT,-EXT,-50,50);OC.position.set(0,20,0);OC.up.set(0,0,-1);OC.lookAt(0,0,0);
 const mat=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,transparent:true,side:THREE.DoubleSide,
-  blending:THREE.CustomBlending,blendEquation:THREE.AddEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneFactor,
+  blending:THREE.CustomBlending,blendEquation:THREE.MaxEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneFactor,
   vertexShader:`attribute vec4 aD;varying vec4 vD;void main(){vD=aD;gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.0);}`,
   fragmentShader:`varying vec4 vD;
   void main(){float u=vD.x,s=vD.y,I=vD.z,au=abs(u);vec3 o=vec3(0.0);
@@ -20,7 +20,7 @@ const mat=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,transparent
       o=vec3(f*0.95,g*0.75,0.0)*on;
     }else{
       /* bow waves: thin frothy lines along the edges of the wedge, fraying outward as they age */
-      float th=0.05+0.1*smoothstep(0.0,220.0,s),dd=au-1.0;
+      float th=max(0.05+0.1*smoothstep(0.0,220.0,s),1.3/max(vD.w,1.0)),dd=au-1.0;
       float line=exp(-pow(dd/(dd<0.0?th*0.6:th*2.2),2.0));
       float f=line*exp(-s/115.0)*(0.65+0.35*exp(-s/20.0));
       float g=exp(-pow(dd/(th*3.5),2.0))*exp(-s/210.0);
@@ -56,7 +56,7 @@ function lay(R,x,z,h,spd,now){const fx=-Math.sin(h),fz=-Math.cos(h),sx=x-fx*11.5
     const lim=Math.abs(k)>1e-4?.85/Math.abs(k):1e9,side=(w,sg)=>Math.min(w,(k*sg>0)?lim:1e9);
     const ox=p.x-wt.x,oz=p.z-wt.y,b4=i*4;
     /* u is measured against the nominal half-width, so a squeezed inner side still reads its true distance */
-    const V=(j,w,sg,kind,nom)=>{const o=(b4+j)*3;pos[o]=ox+nx*w*sg;pos[o+1]=0;pos[o+2]=oz+nz*w*sg;const q=(b4+j)*4;ad[q]=sg*w/nom;ad[q+1]=S[i];ad[q+2]=fade;ad[q+3]=kind};
+    const V=(j,w,sg,kind,nom)=>{const o=(b4+j)*3;pos[o]=ox+nx*w*sg;pos[o+1]=0;pos[o+2]=oz+nz*w*sg;const q=(b4+j)*4;ad[q]=sg*w/nom;ad[q+1]=S[i];ad[q+2]=fade;ad[q+3]=kind?Math.max(1,nom):0};
     V(0,side(wc,1),1,0,wc);V(1,side(wc,-1),-1,0,wc);V(2,side(ww*1.3,1),1,1,ww);V(3,side(ww*1.3,-1),-1,1,ww);cnt=i+1}
   R.g.attributes.position.needsUpdate=true;R.g.attributes.aD.needsUpdate=true;
   const idx=R.g.index.array;let q=0;
@@ -71,8 +71,11 @@ function update(){const now=performance.now()/1e3;FR++;me.fr=FR;
   for(const R of ALL)if(R.fr!==FR){R.m.visible=false;R.pts.length=0;if(R.owner){R.owner.wake=null;R.owner=null}}
   /* paint the wake map */
   f.getClearColor(CC);const ca=f.getClearAlpha(),prev=f.getRenderTarget();
+  /* lock the map to a fixed world grid so texels never slide across the sea (that slide reads as static) */
+  const ts=2*EXT/RES,cx=Math.round(wt.x/ts)*ts-wt.x,cz=Math.round(wt.y/ts)*ts-wt.y;
+  OC.position.set(cx,20,cz);OC.lookAt(cx,0,cz);OC.updateMatrixWorld();ft.uWakeC.value.set(cx,cz);
   f.setRenderTarget(RT);f.setClearColor(0,0);f.clear(true,false,false);f.render(WS,OC);f.setRenderTarget(prev);f.setClearColor(CC,ca);
 }
-return{update,me,tex:RT.texture,EXT,RES};
+return{update,me,tex:RT.texture,rt:RT,EXT,RES};
 })();
 ft.uWake.value=WAKE.tex;
