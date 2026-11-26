@@ -1,6 +1,6 @@
 const RKS=(()=>{
 "use strict";
-const TAU=Math.PI*2,CELL=3400,JIT=520,VIEW=7000,HI_D=1900,SURF_D=2400,STACK_D=4000,SAFE0=1500;
+const TAU=Math.PI*2,CELL=3400,JIT=520,VIEW=5300,HI_D=1900,SURF_D=2400,STACK_D=4000,SAFE0=1500;
 const LOW=u().water<150;
 const clamp=(x,a,b)=>x<a?a:x>b?b:x,sst=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 function h32(a,b,c){let h=Math.imul(a|0,0x27d4eb2d)^Math.imul(b|0,0x165667b1)^Math.imul(c|0,0x9e3779b1);h=Math.imul(h^(h>>>15),0x85ebca6b);h=Math.imul(h^(h>>>13),0xc2b2ae35);return(h^(h>>>16))>>>0}
@@ -115,12 +115,10 @@ const UNI={uSunDir:gt.uniforms.uSunDir,uSunI:gt.uniforms.uSunI,uSunCol:{value:T}
 /* fog colour, fog amount and sky ambient are evaluated per vertex: far cheaper than per pixel */
 const VFOG=`
   vec3 Vv=cameraPosition-w.xyz;float dv=length(Vv);Vv/=dv;
-  vHz=skyBase(normalize(vec3(-Vv.x,0.015,-Vv.z)));
-  float hf=exp(-max(w.y,0.0)/240.0);
-  float fogA=1.0-exp(-dv*(0.00006+0.00013*hf));
-  fogA=max(fogA,smoothstep(uView*0.68,uView,dv));
-  float mist=exp(-max(w.y,0.0)/45.0)*smoothstep(300.0,3000.0,dv)*0.26;
-  vFog=clamp(fogA+mist*(1.0-fogA),0.0,1.0);`;
+  vHz=skyBase(normalize(vec3(-Vv.x,0.0,-Vv.z)));
+  float wf=1.0-exp(-dv*0.00045);wf=clamp(wf*wf*1.25,0.0,1.0);
+  vFog=pow(wf,1.0+max(w.y,0.0)/700.0);
+  vFog=max(vFog,smoothstep(uView*0.8,uView,dv));`;
 const rockMat=new THREE.ShaderMaterial({uniforms:UNI,defines:LOW?{}:{BUMP:1},
   vertexShader:b+`uniform float uView;attribute vec2 aT;varying vec3 vW,vN,vL,vHz,vAmb;varying vec2 vT;varying float vFog;
   void main(){vec4 w=modelMatrix*instanceMatrix*vec4(position,1.0);mat3 im=mat3(instanceMatrix);
