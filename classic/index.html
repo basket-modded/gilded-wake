@@ -861,7 +861,7 @@ let TP=!1,hopK=0;
 const hop=(ph,k)=>Math.abs(Math.sin(ph))*.13*k;
 const lerpA=(a,b,k)=>a+(((b-a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI)*k;
 function update(dt){
-  if(pn==="walk"){hopK=hn.bobAmt;me.position.set(hn.x,hn.y+hop(hn.bob,hopK),hn.z);me.rotation.y=hn.yaw+Math.PI;me.visible=TP&&camD>.9}
+  if(pn==="walk"){hopK=hn.bobAmt;me.position.set(hn.x,hn.y+hop(hn.bob,hopK),hn.z);me.rotation.y=hn.yaw+Math.PI;me.visible=TP&&camD>.05}
   else{me.position.copy(HELM);me.rotation.y=Math.PI;me.visible=pn!=="spy"}
   /* other captains */
   for(const c of Kn.values()){const L=c.snaps;if(!L.length||!c.root.visible||c.dist>700){if(c.av)c.av.visible=!1;continue}
