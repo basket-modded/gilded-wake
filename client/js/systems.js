@@ -31,18 +31,44 @@ function oCreate(o) { if (!NET.on) { o.id = o.id || 'l' + Math.random().toString
 function addObj(o) { if (OBJS.has(o.id)) delObj(o.id); OBJS.set(o.id, o); const m = objMesh(o); if (m) { OBJM.set(o.id, m); } if (o.k === 'bp') basesDirty = 1; if (o.k === 'strongbox') strongChanged(o); }
 function delObj(id) { const o = OBJS.get(id); OBJS.delete(id); const m = OBJM.get(id); if (m) { (m.parent || WORLD).remove(m); OBJM.delete(id); } if (o && o.k === 'bp') basesDirty = 1; }
 function updObj(id, p, by) { const o = OBJS.get(id); if (!o) return; const prev = Object.assign({}, o); Object.assign(o, p); if (o.k === 'bp') basesDirty = 1; if (o.k === 'strongbox') { strongChanged(o, prev, by); } if (o.k === 'bp' && o.p === 'door') { const m = OBJM.get(id); } }
-const coinGeo = merge([...Array(7)].map((_, i) => xf(cyl(0.09, 0.09, 0.02, 10), rand(-0.15, 0.15), i * 0.02, rand(-0.15, 0.15))));
-const bagGeo = merge([xf(new THREE.SphereGeometry(0.28, 10, 8), 0, 0.22, 0, 0, 0, 0, 1, 1.1, 1), xf(cyl(0.06, 0.12, 0.12, 8), 0, 0.5, 0)]);
-const sackMat = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 1 });
-const goldMat = new THREE.MeshStandardMaterial({ color: 0xe0aa38, metalness: 0.85, roughness: 0.3, emissive: 0x2a1700 });
+const LOOTG = {
+  coin: (() => { const g = lathe([[0.001, 0], [0.034, 0], [0.036, 0.003], [0.036, 0.009], [0.034, 0.012], [0.001, 0.012]], 14); return g; })(),
+  bag: lathe([[0.001, 0], [0.18, 0.01], [0.27, 0.12], [0.28, 0.25], [0.2, 0.4], [0.07, 0.48], [0.05, 0.5], [0.09, 0.56], [0.06, 0.6], [0.001, 0.6]], 14, 1, 0.9),
+  tie: (() => { const t = new THREE.TorusGeometry(0.06, 0.012, 5, 12); t.rotateX(Math.PI / 2); t.translate(0, 0.5, 0); return t; })(),
+  chestBody: uvBox(0.95, 0.5, 0.6, 1.2), chestLid: (() => { const g = new THREE.CylinderGeometry(0.3, 0.3, 0.95, 14, 1, false, 0, Math.PI); g.rotateZ(Math.PI / 2); g.rotateX(-Math.PI / 2); return g; })(),
+  strap: (() => { const L = []; for (const x of [-0.32, 0.32]) { const t = new THREE.TorusGeometry(0.305, 0.012, 4, 14, Math.PI); t.rotateY(Math.PI / 2); t.translate(x, 0.5, 0); L.push(t, xf(box(0.06, 0.5, 0.62), x, 0.25, 0)); } L.push(xf(box(0.12, 0.16, 0.04), 0, 0.5, 0.31)); return merge(L); })(),
+  gem: new THREE.OctahedronGeometry(0.09, 0), scroll: merge([lathe([[0.04, -0.2], [0.042, -0.19], [0.042, 0.19], [0.04, 0.2]], 12), xf(new THREE.TorusGeometry(0.045, 0.008, 4, 12), 0, 0.02, 0, Math.PI / 2, 0, 0)]),
+};
+// the carried treasure chest uses the same model as the chests on the ground
+setTimeout(() => { carryMesh.geometry = LOOTG.chestBody; carryMesh.material = MAT.med; const lid = new THREE.Mesh(LOOTG.chestLid, MAT.med); lid.position.y = 0.25; carryMesh.add(lid); const st = new THREE.Mesh(LOOTG.strap, BLD.iron); st.position.y = -0.25; carryMesh.add(st); }, 0);
+const goldMat = stdMat({ color: 0xe6b448, metalness: 1, roughness: 0.26, envMapIntensity: 1.3 });
+const sackMat = stdMat({ map: TEX.fabric, color: 0x9a7e56, roughness: 1 });
+const GEMC = { gem: 0x2a8a4a, jewel: 0xb0182a, idol: 0xd4a23a, relic: 0x6a3a9a, coins: 0xe6b448 };
+function coinPile(n, r) { const g = new THREE.Group(); const rs = srng(n * 31 + 7);
+  for (let s2 = 0; s2 < Math.min(6, Math.ceil(n / 3)); s2++) { const a = rs() * TAU, d = rs() * r, h = 2 + (rs() * 7 | 0); for (let k = 0; k < h; k++) { const c = new THREE.Mesh(LOOTG.coin, goldMat); c.position.set(Math.cos(a) * d + (rs() - 0.5) * 0.008, k * 0.0125, Math.sin(a) * d + (rs() - 0.5) * 0.008); c.rotation.y = rs() * 6; g.add(c); } }
+  for (let k = 0; k < n; k++) { const c = new THREE.Mesh(LOOTG.coin, goldMat); const a = rs() * TAU, d = Math.sqrt(rs()) * r * 1.3; c.position.set(Math.cos(a) * d, 0.006, Math.sin(a) * d); c.rotation.set((rs() - 0.5) * 0.6, rs() * 6, (rs() - 0.5) * 0.6); g.add(c); }
+  return g; }
 function objMesh(o) {
   let m = null;
-  if (o.k === 'gold') { m = new THREE.Group(); const n = clamp(Math.ceil(o.v / 400), 1, 6); for (let i = 0; i < n; i++) { const c = new THREE.Mesh(i ? coinGeo : bagGeo, i ? goldMat : sackMat); c.position.set(rand(-0.4, 0.4) * (i ? 1 : 0), 0, rand(-0.4, 0.4) * (i ? 1 : 0)); c.rotation.y = rand(0, 6); m.add(c); } const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffc040, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.6 })); s.position.y = 0.4; s.scale.setScalar(1.6); m.add(s); }
-  else if (o.k === 'item') { const it = ITEMS[o.it] || {}; m = new THREE.Mesh(it.cat === 'treasure' ? (o.it === 'cargo' ? new THREE.BoxGeometry(1, 0.8, 1) : new THREE.OctahedronGeometry(0.25)) : o.it === 'map' ? new THREE.CylinderGeometry(0.06, 0.06, 0.4, 8) : new THREE.BoxGeometry(0.5, 0.35, 0.5), o.it === 'cargo' ? MAT.crate : it.cat === 'treasure' ? goldMat : o.it === 'map' ? MAT.paper : MAT.med); if (o.it === 'map') m.rotation.z = Math.PI / 2; }
-  else if (o.k === 'sack') { m = new THREE.Mesh(bagGeo, sackMat); m.scale.setScalar(1.3); }
-  else if (o.k === 'tchest') { m = new THREE.Group(); const b = new THREE.Mesh(box(0.95, 0.55, 0.6), MAT.med); b.position.y = 0.28; m.add(b); const lid = new THREE.Mesh(box(0.97, 0.18, 0.62), MAT.med); lid.position.y = 0.63; m.add(lid); const bands = new THREE.Mesh(merge([xf(box(0.99, 0.05, 0.64), 0, 0.15, 0), xf(box(0.99, 0.05, 0.64), 0, 0.5, 0), xf(box(0.1, 0.14, 0.03), 0, 0.55, 0.32)]), MAT.brass); m.add(bands); const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffc860, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.7 })); s.position.y = 0.8; s.scale.setScalar(2.4); m.add(s); m.userData.rise = 1; }
-  else if (o.k === 'keg') { m = new THREE.Group(); const k = new THREE.Mesh(barrelWoodG, MAT.med); k.scale.setScalar(1.2); k.rotation.z = o.float ? Math.PI / 2 : 0; m.add(k); const h = new THREE.Mesh(hoopG, MAT.iron); h.scale.copy(k.scale); h.rotation.copy(k.rotation); m.add(h); const f = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.2), MAT.red); f.position.y = 0.9; m.add(f); }
+  if (o.k === 'gold') { m = new THREE.Group(); const n = clamp(Math.ceil(o.v / 300), 2, 14); const bag = new THREE.Mesh(LOOTG.bag, sackMat); bag.scale.setScalar(o.v > 1500 ? 1.1 : 0.8); bag.castShadow = true; m.add(bag); m.add(new THREE.Mesh(LOOTG.tie, CM.rope)); const p = coinPile(n, 0.28); p.position.set(0.3, 0, 0.1); m.add(p);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffb030, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.16 })); s.position.y = 0.25; s.scale.setScalar(0.9); m.add(s); }
+  else if (o.k === 'item') { const it = ITEMS[o.it] || {};
+    if (weaponMesh(o.it) && !['rum', 'ale'].includes(o.it)) { m = new THREE.Group(); const w = weaponMesh(o.it); w.rotation.set(Math.PI / 2, 0, Math.random() * 6); w.position.y = 0.05; m.add(w); }
+    else if (o.it === 'rum' || o.it === 'ale') { m = weaponMesh(o.it); }
+    else if (o.it === 'cargo') { m = new THREE.Group(); const c = new THREE.Mesh(box(1, 0.8, 1), MAT.crate); c.position.y = 0.4; c.castShadow = true; m.add(c); m.add(meshOf([xf(box(1.04, 0.05, 0.05), 0, 0.82, 0.2), xf(box(0.05, 0.05, 1.04), 0.2, 0.82, 0), xf(box(1.04, 0.84, 0.05), 0, 0.4, 0.2), xf(box(0.05, 0.84, 1.04), 0.2, 0.4, 0)], CM.rope, false, false)); }
+    else if (o.it === 'map') { m = new THREE.Mesh(LOOTG.scroll, CM.paper); m.rotation.z = Math.PI / 2; m.position.y = 0.04; const g = new THREE.Group(); g.add(m); const rb = new THREE.Mesh(new THREE.TorusGeometry(0.046, 0.01, 4, 12), CM.red); rb.rotation.y = Math.PI / 2; g.add(rb); rb.position.y = 0.04; m = g; }
+    else if (it.cat === 'treasure') { m = new THREE.Group(); if (o.it === 'coins') m.add(coinPile(12, 0.18)); else { const gm = new THREE.Mesh(LOOTG.gem, stdMat({ color: GEMC[o.it] || 0x2a8a4a, metalness: 0.3, roughness: 0.05, envMapIntensity: 2.5, emissive: GEMC[o.it] || 0x2a8a4a, emissiveIntensity: 0.15 })); gm.scale.set(1, 1.3, 1); gm.position.y = 0.12; m.add(gm); }
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xfff0b0, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.22 })); s.position.y = 0.2; s.scale.setScalar(0.6); m.add(s); }
+    else if (['fish', 'food'].includes(it.cat)) { m = new THREE.Mesh(lathe([[0.001, -0.15], [0.04, -0.1], [0.05, 0.02], [0.03, 0.12], [0.001, 0.15]], 8, 0.5, 1), stdMat({ color: it.cat === 'fish' ? 0x8aa0b0 : 0xa86a3a, metalness: it.cat === 'fish' ? 0.5 : 0, roughness: 0.4 })); m.rotation.x = Math.PI / 2; m.position.y = 0.03; }
+    else { m = new THREE.Group(); prop(m, ['wood', 'plank', 'metal'].includes(o.it) ? 'crate' : 'sack', 0, 0, 0, 0, 0.6); }
+  }
+  else if (o.k === 'sack') { m = new THREE.Group(); const b = new THREE.Mesh(LOOTG.bag, sackMat); b.scale.setScalar(1.1); b.castShadow = true; m.add(b); m.add(new THREE.Mesh(LOOTG.tie, CM.rope)); }
+  else if (o.k === 'tchest') { m = new THREE.Group(); const b = new THREE.Mesh(LOOTG.chestBody, MAT.med); b.position.y = 0.25; b.castShadow = true; m.add(b); const lid = new THREE.Mesh(LOOTG.chestLid, MAT.med); lid.position.y = 0.5; lid.castShadow = true; m.add(lid); m.add(new THREE.Mesh(LOOTG.strap, BLD.iron));
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffc860, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.3 })); s.position.y = 0.75; s.scale.setScalar(1.6); m.add(s); m.userData.rise = 1; }
+  else if (o.k === 'keg') { m = new THREE.Group(); const k = weaponMesh('keg'); k.scale.setScalar(1.9); k.rotation.z = o.float ? Math.PI / 2 : 0; k.position.y = o.float ? 0 : 0.38; m.add(k);
+    const mark = new THREE.Mesh(new THREE.CircleGeometry(0.12, 12), stdMat({ color: 0xc02a1a, roughness: 0.8 })); mark.position.set(0, o.float ? 0 : 0.4, 0.36); m.add(mark); }
   if (!m) return null;
+  m.traverse(c => { if (c.isMesh) c.castShadow = true; });
   m.userData.o = o; WORLD.add(m); placeObj(o, m, 0); return m;
 }
 function placeObj(o, m, t) {
@@ -106,10 +132,10 @@ function objInteract() {
     }
   }
   if (PL.mode === 'swim') {
-    for (const e of shipsNear(p.x, p.z, 40)) { if (e === JBENT) { if (Math.hypot(JB.o.x - p.x, JB.o.y - p.z) < 3) return { label: () => 'Climb into the jolly boat', act: () => { PL.plat = JBENT; PL.mode = 'row'; PL.l.set(0, 0.35, 0.6); PL.yaw = 0; } }; continue; }
+    for (const e of shipsNear(p.x, p.z, 40)) { if (e === JBENT) { if (Math.hypot(JB.o.x - p.x, JB.o.y - p.z) < 3) return { label: () => 'Climb into the jolly boat', act: () => { PL.plat = JBENT; PL.mode = 'row'; PL.l.set(0, -0.05, 0.6); PL.yaw = 0; } }; continue; }
       const b = platBody(e); tmpL.set(p.x - org.x, 0, p.z - org.y); b.worldToLocal(tmpL);
       const row = isRowPlat(e); const inside = row ? Math.abs(tmpL.x) < 1.6 && Math.abs(tmpL.z) < 3 : (tmpL.x / 6) ** 2 + ((tmpL.z + 0.5) / 17) ** 2 < 1;
-      if (inside) return { label: () => e === OWN ? 'Climb aboard your ship' : `Climb aboard the ${e.name || 'ship'}`, sub: e === OWN ? '' : 'board her!', act: () => { const sg = Math.sign(tmpL.x) || 1, z = clamp(tmpL.z, -10, 5); PL.plat = e; PL.l.set(row ? 0 : sg * (hw(z) * 0.8), row ? 0.32 : DECK, row ? 0 : z); PL.eyeY = PL.l.y; PL.yaw = 0; PL.mode = row ? 'row' : 'walk'; sfx.creak(0.2, null, 0.6); } };
+      if (inside) return { label: () => e === OWN ? 'Climb aboard your ship' : `Climb aboard the ${e.name || 'ship'}`, sub: e === OWN ? '' : 'board her!', act: () => { const sg = Math.sign(tmpL.x) || 1, z = clamp(tmpL.z, -10, 5); PL.plat = e; PL.l.set(row ? 0 : sg * (hw(z) * 0.8), row ? -0.05 : DECK, row ? 0 : z); PL.eyeY = PL.l.y; PL.yaw = 0; PL.mode = row ? 'row' : 'walk'; sfx.creak(0.2, null, 0.6); } };
     }
   }
   if (PL.mode === 'row' && PL.plat === JBENT) {
@@ -157,7 +183,7 @@ function strongChanged(o, prev, by) {
 let basesDirty = 1, buildIdx = 0, buildRot = 0;
 const BUILD_LIST = Object.keys(PIECES);
 const baseGroup = new THREE.Group(); WORLD.add(baseGroup);
-const BMAT = { wood: new THREE.MeshStandardMaterial({ map: tx(medTex, 0.7, 0.7), roughness: 0.85 }), stone: new THREE.MeshStandardMaterial({ color: 0x9a948a, roughness: 0.95, flatShading: false }), ghostOk: new THREE.MeshBasicMaterial({ color: 0x7fd18b, transparent: true, opacity: 0.35, depthWrite: false }), ghostBad: new THREE.MeshBasicMaterial({ color: 0xe8655f, transparent: true, opacity: 0.35, depthWrite: false }) };
+const BMAT = { wood: stdMat({ map: TEX.timber, roughness: 0.85 }), stone: stdMat({ map: TEX.stone, color: 0x9c9488, roughness: 0.95 }), ghostOk: new THREE.MeshBasicMaterial({ color: 0x7fd18b, transparent: true, opacity: 0.35, depthWrite: false }), ghostBad: new THREE.MeshBasicMaterial({ color: 0xe8655f, transparent: true, opacity: 0.35, depthWrite: false }) };
 let BCELLS = new Map(); // "cx,cz" -> foundation top y
 function pieceGeo(o) {
   const p = o.p, L = [];
@@ -197,12 +223,12 @@ function rebuildBases() {
     if (o.p === 'stairs') FLOORS.push({ x: cx, z: cz, hx: CELL / 2, hz: CELL / 2, top: b0, stair: o.r || 0 });
     if (['wall', 'window', 'doorway', 'door'].includes(o.p)) { const e = o.e || 0; const ex = [0, 1, 0, -1][e] * CELL / 2, ez = [-1, 0, 1, 0][e] * CELL / 2; if (o.p === 'wall' || o.p === 'window' || (o.p === 'door' && !o.open)) BLOCKS.push({ x: cx + ex, z: cz + ez, hx: e % 2 ? 0.15 : CELL / 2, hz: e % 2 ? CELL / 2 : 0.15, y0: b0, y1: b0 + 3, id: o.id }); if (o.p === 'doorway') { for (const s of [-1, 1]) BLOCKS.push({ x: cx + ex + (e % 2 ? 0 : s * 1.05), z: cz + ez + (e % 2 ? s * 1.05 : 0), hx: e % 2 ? 0.15 : 0.45, hz: e % 2 ? 0.45 : 0.15, y0: b0, y1: b0 + 3 }); } }
   }
-  for (const k in by) if (by[k].length) { const m = new THREE.Mesh(merge(by[k]), BMAT[k]); m.castShadow = m.receiveShadow = true; baseGroup.add(m); baseMeshes.push(m); }
+  for (const k in by) if (by[k].length) { const gm = merge(by[k]); const uv = gm.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 0.35, uv.getY(i) * 0.35); const m = new THREE.Mesh(gm, BMAT[k]); m.castShadow = m.receiveShadow = true; baseGroup.add(m); baseMeshes.push(m); }
   // doors and free-standing pieces as their own meshes
   const seen = new Set();
   for (const o of OBJS.values()) {
     if (o.k !== 'bp') continue;
-    if (o.p === 'door') { seen.add(o.id); let m = doorMeshes.get(o.id); if (!m) { m = new THREE.Group(); const d = new THREE.Mesh(box(1.18, 2.35, 0.1), MAT.med); d.position.set(0.59, 1.18, 0); m.add(d); const ir = new THREE.Mesh(xf(box(0.08, 0.08, 0.14), 1.0, 1.15, 0), MAT.iron); m.add(ir); baseGroup.add(m); doorMeshes.set(o.id, m); }
+    if (o.p === 'door') { seen.add(o.id); let m = doorMeshes.get(o.id); if (!m) { m = new THREE.Group(); const d = new THREE.Mesh(uvBox(1.18, 2.35, 0.1, 0.45), BLD.plank); d.position.set(0.59, 1.18, 0); m.add(d); const ir = new THREE.Mesh(xf(box(0.08, 0.08, 0.14), 1.0, 1.15, 0), MAT.iron); m.add(ir); baseGroup.add(m); doorMeshes.set(o.id, m); }
       const cy = cellY(o.cx, o.cz); if (cy == null) { m.visible = false; continue; } m.visible = true; const e = o.e || 0; const cx = (o.cx + 0.5) * CELL + [0, 1, 0, -1][e] * CELL / 2, cz = (o.cz + 0.5) * CELL + [-1, 0, 1, 0][e] * CELL / 2;
       const rot = e % 2 ? Math.PI / 2 : 0; m.position.set(cx - (e % 2 ? 0 : 0.6), cy + (o.lv || 0) * 3, cz - (e % 2 ? -0.6 : 0)); m.rotation.y = rot + (o.open ? -1.6 : 0); m.userData.o = o; }
     if (PIECES[o.p] && PIECES[o.p].place === 'free') { seen.add(o.id); let m = freeMeshes.get(o.id); if (!m) { m = freeMesh(o); baseGroup.add(m); freeMeshes.set(o.id, m); } m.position.set(o.x, o.y, o.z); m.rotation.y = (o.r || 0) * Math.PI / 2; m.userData.o = o;
@@ -213,7 +239,7 @@ function rebuildBases() {
 }
 function freeMesh(o) {
   const g = new THREE.Group();
-  if (o.p === 'chest') { g.add(new THREE.Mesh(merge([xf(box(1.1, 0.6, 0.6), 0, 0.3, 0), xf(box(1.12, 0.12, 0.62), 0, 0.62, 0)]), MAT.med)); g.add(new THREE.Mesh(merge([xf(box(1.14, 0.05, 0.64), 0, 0.2, 0), xf(box(1.14, 0.05, 0.64), 0, 0.5, 0)]), MAT.iron)); }
+  if (o.p === 'chest') { const b = new THREE.Mesh(LOOTG.chestBody, MAT.med); b.position.y = 0.25; g.add(b); const l = new THREE.Mesh(LOOTG.chestLid, MAT.med); l.position.y = 0.5; g.add(l); g.add(new THREE.Mesh(LOOTG.strap, BLD.iron)); g.scale.setScalar(1.15); }
   else if (o.p === 'campfire') { const c = campfire(0, 0, g); c.position.set(0, 0, 0); }
   else if (o.p === 'cannon') { const car = new THREE.Mesh(carriageG, MAT.med); g.add(car); const b = new THREE.Mesh(barrelG, MAT.iron); b.position.y = 0.62; b.rotation.z = 0.08; g.add(b); }
   else if (o.p === 'rack') { g.add(new THREE.Mesh(merge([xf(box(1.4, 0.08, 0.2), 0, 1.4, 0), xf(box(1.4, 0.08, 0.2), 0, 0.5, 0), xf(box(0.08, 1.6, 0.08), -0.66, 0.8, 0), xf(box(0.08, 1.6, 0.08), 0.66, 0.8, 0)]), MAT.dark)); for (let i = 0; i < 3; i++) { const w = weaponMesh(['cutlass', 'musket', 'axe'][i]); w.position.set(-0.4 + i * 0.4, 0.55, 0.05); g.add(w); } }
@@ -320,10 +346,8 @@ function baseInteract() {
 }
 
 /* ================= SHARKS ================= */
-const sharkGeo = merge([xf(new THREE.SphereGeometry(0.5, 10, 6), 0, 0, 0, 0, 0, 0, 0.6, 0.55, 2.6), xf(new THREE.ConeGeometry(0.28, 0.75, 4), 0, 0.55, 0.1, -0.35, 0, 0), xf(new THREE.ConeGeometry(0.3, 0.7, 4), 0, 0.1, 1.5, Math.PI / 2, 0, 0, 1, 1, 0.3)]);
-const sharkMat = new THREE.MeshStandardMaterial({ color: 0x5f6a72, roughness: 0.6 });
 const SHARKS = [];
-for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(sharkGeo, sharkMat); scene.add(m); SHARKS.push({ m, a: rand(0, TAU), r: rand(25, 45), hp: 80, cd: 0, flee: 0, o: new THREE.Vector2(rand(-200, 200), rand(-200, 200)), dep: 0, dead: 0 }); }
+for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(SHARK_GEO, sharkMaterial()); m.add(new THREE.Mesh(SHARK_EYE, CM.eye)); m.castShadow = true; scene.add(m); SHARKS.push({ m, a: rand(0, TAU), r: rand(25, 45), hp: 80, cd: 0, flee: 0, o: new THREE.Vector2(rand(-200, 200), rand(-200, 200)), dep: -0.35, dead: 0 }); }
 function killShark(sh) { sh.dead = 30; sh.hp = 0; splash(sh.m.position, 0.5); say('The shark rolls over and sinks.', 1.5); if (Math.random() < 0.5) invAdd('f_tuna', 1); }
 function updateSharks(dt, t) {
   const me = playerOcean(), swimming = PL.mode === 'swim' && PL.alive;
@@ -339,7 +363,8 @@ function updateSharks(dt, t) {
     const dx = tx - sh.o.x, dz = tz - sh.o.y, d = Math.hypot(dx, dz) || 1, v = sh.flee > 0 ? 7 : swimming && dP < 40 ? 5 : 3;
     sh.o.x += dx / d * v * dt; sh.o.y += dz / d * v * dt;
     const wx = sh.o.x - org.x, wz = sh.o.y - org.y;
-    sh.m.position.set(wx, waveH(wx, wz, seaT) + sh.dep, wz); sh.m.rotation.set(0, Math.atan2(dx, dz) + Math.PI, Math.sin(t * 3 + sh.a) * 0.1);
+    sh.m.position.set(wx, waveH(wx, wz, seaT) + sh.dep, wz); const yaw = Math.atan2(dx, dz) + Math.PI; sh.yaw = sh.yaw == null ? yaw : lerpAng2(sh.yaw, yaw, Math.min(1, dt * 2)); sh.m.rotation.set(0, sh.yaw, (lerpAng2(sh.yaw, yaw, 1) - sh.yaw) * 0.8);
+    sh.ph = (sh.ph || 0) + dt * (2.2 + v * 0.9); sh.m.material.userData.swim.value = sh.ph; sh.m.material.userData.amp.value = 0.7 + v * 0.08;
   }
 }
 
@@ -493,7 +518,7 @@ const ownCrew = [];
 function spawnOwnCrew() {
   ownCrew.forEach(c => ship.remove(c.av.root)); ownCrew.length = 0;
   const n = Math.min(OWN.crewN || 0, 8); if (!OWN.has || OWN.row) return;
-  for (let i = 0; i < n; i++) { const av = makeAvatar({ coat: ['#5a3a2a', '#2f3e4a', '#4a2a2a'][i % 3], hat: i % 2 }); const spot = [[2.6, -5.5], [-2.6, -5.5], [2.6, -2.5], [-2.6, -2.5], [0.8, -8.5], [-0.8, 4.5], [2.6, 1], [-2.6, 1]][i]; av.root.position.set(spot[0], DECK, spot[1]); av.root.rotation.y = spot[0] > 0 ? -Math.PI / 2 : Math.PI / 2; ship.add(av.root); ownCrew.push({ av, t: rand(0, 9), hp: 60, home: spot }); }
+  for (let i = 0; i < n; i++) { const av = makeAvatar({ coat: ['#5a3a2a', '#2f3e4a', '#4a2a2a'][i % 3], style: 'sailor', seed: 900 + i * 37 }); const spot = [[2.6, -5.5], [-2.6, -5.5], [2.6, -2.5], [-2.6, -2.5], [0.8, -8.5], [-0.8, 4.5], [2.6, 1], [-2.6, 1]][i]; av.root.position.set(spot[0], DECK, spot[1]); av.root.rotation.y = spot[0] > 0 ? -Math.PI / 2 : Math.PI / 2; ship.add(av.root); ownCrew.push({ av, t: rand(0, 9), hp: 60, home: spot }); }
 }
 function updateOwnCrew(dt, t) {
   const boarders = [...PEERS.values()].filter(P => P.pp === 'p:' + NET.id && P.alive !== 0);

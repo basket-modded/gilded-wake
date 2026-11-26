@@ -14,7 +14,7 @@ function playerWorld(out = new THREE.Vector3()) {
   return out.set(PL.o.x - org.x, PL.y + 0.9, PL.o.y - org.y);
 }
 function playerOcean() { const w = playerWorld(tmpW); return { x: w.x + org.x, z: w.z + org.y, y: w.y }; }
-function deckFloor(p, x, z, y) { if (isRowPlat(p)) return 0.32; return floorAt(x, z, y); }
+function deckFloor(p, x, z, y) { if (isRowPlat(p)) return -0.05; return floorAt(x, z, y); }
 function deckBlocked(p, x, z, y) {
   if (isRowPlat(p)) return Math.abs(x) > 0.7 || Math.abs(z) > 2.3;
   if (p === OWN) return blocked(x, z, y);
@@ -44,29 +44,78 @@ function leaveShip(vx, vz, vy) {
 }
 
 /* ---- view model (first-person hands and weapon) ---- */
-const VM = new THREE.Group(); camera.add(VM);
+// the hands live in their own scene, drawn after the world with a cleared depth buffer, so walls and water never swallow them
+const VMS = new THREE.Scene(), vmAnchor = new THREE.Group(); VMS.add(vmAnchor);
+const vmSun = new THREE.DirectionalLight(0xffffff, 1), vmHemi = new THREE.HemisphereLight(0x8a86b8, 0x2a1a12, 0.5); VMS.add(vmSun, vmSun.target, vmHemi);
+const VM = new THREE.Group(); vmAnchor.add(VM);
+function syncViewModelScene() { vmAnchor.position.copy(camera.position); vmAnchor.quaternion.copy(camera.quaternion); vmAnchor.updateMatrixWorld(true);
+  vmSun.color.copy(sun.color); vmSun.intensity = sun.intensity; vmSun.position.copy(camera.position).addScaledVector(ENV.night > 0.5 ? moonDir : sunDir, 10); vmSun.target.position.copy(camera.position); vmSun.target.updateMatrixWorld();
+  vmHemi.color.copy(hemi.color); vmHemi.groundColor.copy(hemi.groundColor); vmHemi.intensity = hemi.intensity; VMS.environment = scene.environment; }
+const vmRig = new THREE.Group(); VM.add(vmRig);
+const vmHand = new THREE.Group(); vmRig.add(vmHand);
+const vmLeft = new THREE.Group(); VM.add(vmLeft);
+const vmSkin = skinMat(SKIN[1]), vmSleeve = clothMat('#3a2a26'), vmCuffM = clothMat('#e0d6c2');
+function vmHandMeshes(g, mirror) { const f = new THREE.Mesh(CG.fist, vmSkin); f.scale.x = mirror ? -1 : 1; g.add(f); }
+vmHandMeshes(vmHand, false); vmHandMeshes(vmLeft, true);
+const vmFore = new THREE.Group(); VM.add(vmFore); { const m = new THREE.Mesh(CG.fore, vmSleeve); m.scale.set(0.95, 1, 0.95); vmFore.add(m); const c = new THREE.Mesh(CG.cuff, vmCuffM); c.position.y = -0.21; c.scale.set(0.92, 0.8, 0.92); vmFore.add(c); }
+const vmForeL = new THREE.Group(); VM.add(vmForeL); { const m = new THREE.Mesh(CG.fore, vmSleeve); m.scale.set(0.95, 1, 0.95); vmForeL.add(m); }
+// anything closer than 9 cm to the eye is cut cleanly instead of filling the screen
+const vmClip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0); renderer.localClippingEnabled = true;
+const vmMats = new Map(); function vmMat(m) { if (!vmMats.has(m)) { const c = new THREE.MeshStandardMaterial({ color: m.color ? m.color.clone() : 0xffffff, map: m.map || null, metalness: m.metalness || 0, roughness: m.roughness != null ? m.roughness : 0.8,
+    envMapIntensity: m.envMapIntensity != null ? m.envMapIntensity : 1, vertexColors: !!m.vertexColors, transparent: !!m.transparent, opacity: m.opacity != null ? m.opacity : 1, side: m.side || THREE.FrontSide, emissive: m.emissive ? m.emissive.clone() : 0x000000, clippingPlanes: [vmClip] }); vmMats.set(m, c); } return vmMats.get(m); }
+function vmPrep(root) { root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 30; o.material = vmMat(o.material); } }); }
+vmPrep(VM);
 let vmKey = '', vmMesh = null;
-const vmArm = new THREE.Mesh(box(0.1, 0.1, 0.5), coatMat('#7a2e1f')); vmArm.position.set(0.2, -0.24, -0.1); VM.add(vmArm);
+const TWO = { musket: 1, blunder: 1, shovel: 1, rod: 0, bucket: 0, keg: 1 };
 function setViewModel(k) {
-  if (k === vmKey) return; vmKey = k; if (vmMesh) VM.remove(vmMesh); vmMesh = k ? weaponMesh(k) : null;
-  if (vmMesh) { vmMesh.scale.setScalar(0.5); VM.add(vmMesh); vmMesh.traverse(o => { if (o.material) { o.renderOrder = 30; } }); }
-  PL.drawT = 0.3;
+  if (k === vmKey) return; vmKey = k; if (vmMesh) vmHand.remove(vmMesh); vmMesh = k ? weaponMesh(k) : null;
+  if (vmMesh) { const it = ITEMS[k] || {}; vmMesh.position.set(0, -0.06, 0.012); vmMesh.rotation.set(Math.PI / 2, it.cat === 'gun' ? Math.PI : 0, 0); if (['rum', 'ale', 'bucket', 'keg', 'dynamite', 'flare', 'cigar'].includes(k)) vmMesh.rotation.set(0.3, 0, 0);
+    vmHand.add(vmMesh); vmPrep(vmMesh); }
+  PL.drawT = 0.35;
 }
+// orient the wrist so the held item points along F with the back of the hand toward U
+const _vx = new THREE.Vector3(), _vy = new THREE.Vector3(), _vz = new THREE.Vector3(), _vm = new THREE.Matrix4(), _vq = new THREE.Quaternion();
+function aimWrist(F, U, k) { _vz.set(F[0], F[1], F[2]).normalize(); _vy.set(U[0], U[1], U[2]); _vy.addScaledVector(_vz, -_vy.dot(_vz)).normalize(); _vx.crossVectors(_vy, _vz);
+  _vm.makeBasis(_vx, _vy, _vz); _vq.setFromRotationMatrix(_vm); vmHand.quaternion.slerp(_vq, k); }
+function placeFore(g, wrist, elbow) { const d = _vx.subVectors(wrist, elbow); const L = d.length(); g.position.copy(elbow); g.quaternion.setFromUnitVectors(_vy.set(0, -1, 0), d.normalize()); g.scale.set(1, L / 0.265, 1); }
+const vmW = new THREE.Vector3(), vmE = new THREE.Vector3(), vmL = new THREE.Vector3();
 function updateViewModel(dt, t) {
-  const fp = ['walk', 'swim', 'nest', 'row'].includes(PL.mode) && PL.alive && !menuOpen;
+  const fp = ['walk', 'swim', 'nest', 'row'].includes(PL.mode) && PL.alive && !menuOpen && !window.__cam;
   VM.visible = fp && !PL.carry; if (!VM.visible) return;
-  const it = ITEMS[curItem()] || {}; const isGun = it.cat === 'gun';
+  { const n = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), p = camera.position.clone().addScaledVector(n, 0.09); vmClip.setFromNormalAndCoplanarPoint(n, p); }
+  const k = curItem(), it = ITEMS[k] || {}; const isGun = it.cat === 'gun', melee = it.cat === 'melee';
   PL.drawT = Math.max(0, (PL.drawT || 0) - dt);
-  const bob = Math.sin(PL.bob * 2) * 0.012 * PL.bobAmt, sw = Math.cos(PL.bob) * 0.01 * PL.bobAmt;
-  let x = 0.26 + sw, y = -0.3 + bob - PL.drawT * 1.2, z = -0.5, rx = 0, ry = 0, rz = 0;
-  if (isGun) { rx = 0; if (PL.ads && it.ads) { x = 0.0; y = -0.11; z = -0.42; } else if (PL.ads) { x = 0.12; y = -0.2; } if (PL.reload > 0) { rx = -0.9 * Math.sin(Math.min(1, PL.reload / (it.rel || 1)) * Math.PI); y -= 0.1; } rx += (PL.kick || 0); }
-  else if (it.cat === 'melee') { rx = -0.3; rz = -0.3; if (PL.swing > 0) { const s = 1 - PL.swing; rx = -1.5 + s * 2.4; ry = 0.9 - s * 1.8 * (PL.swingDir || 1); z = -0.55; } if (PL.blocking) { rx = 0.1; rz = -1.35; x = 0.08; y = -0.18; } }
-  else if (curItem() === 'shovel') { rx = -0.5; if (PL.dig > 0) { rx = -0.5 - Math.abs(Math.sin(t * 6)) * 0.8; y -= 0.1; } }
-  else if (curItem() === 'rod') { rx = -0.9 - (PL.cast && PL.cast.bite ? 0.2 * Math.sin(t * 30) : 0); }
-  else { rx = -0.2; }
+  const bob = Math.sin(PL.bob * 2) * 0.012 * PL.bobAmt, sw = Math.cos(PL.bob) * 0.012 * PL.bobAmt, br = Math.sin(t * 1.5) * 0.004;
+  let px = 0.2 + sw, py = -0.24 + bob + br - PL.drawT * 0.9, pz = -0.4, F = [-0.12, 0.42, -1], U = [0.25, 0.4, 0.9], a = Math.min(1, dt * 14);
+  if (!k) { F = [-0.3, -0.2, -1]; U = [0.3, 1, 0]; py -= 0.06; }
+  if (melee) {
+    if (k === 'axe') { F = [-0.2, 0.75, -0.6]; }
+    if (PL.swing > 0) { const s = 1 - PL.swing, d = PL.swingDir || 1, wind = Math.min(1, s / 0.22), hit = clamp((s - 0.22) / 0.55, 0, 1);
+      F = [lerp(0.55 * d, -0.75 * d, hit), lerp(0.85, -0.45, hit) * (s < 0.22 ? wind : 1), lerp(-0.15, -0.6, hit)]; U = [-0.2 * d, 0.2, 1]; px = lerp(0.26, 0.02, hit); py = lerp(-0.12, -0.3, hit); pz = -0.45; a = 1; }
+    if (PL.blocking) { F = [-1, 0.22, -0.35]; U = [0, 0.3, 1]; px = 0.05; py = -0.14; pz = -0.42; }
+  }
+  if (isGun) { F = [-0.03, 0.02, -1]; U = [0, 1, 0.12]; px = 0.14 + sw; py = -0.165 + bob; pz = -0.3;
+    if (k !== 'pistol') { pz = -0.5; py = -0.26; px = 0.2; F = [-0.07, 0.07, -1]; U = [0.35, 1, 0.1]; }
+    if (PL.ads) { px = 0.0; py = k === 'pistol' ? -0.115 : -0.075; pz = k === 'pistol' ? -0.42 : -0.3; F = [0, 0, -1]; }
+    if (PL.reload > 0) { const r = Math.sin(Math.min(1, PL.reload / (it.rel || 1)) * Math.PI); F = [0.2 * r, 0.7 * r, -1]; py -= 0.12 * r; px -= 0.06 * r; }
+    F[1] += (PL.kick || 0) * 4; pz += (PL.kick || 0) * 0.6; }
+  if (k === 'shovel') { F = [-0.25, -0.62, -0.75]; U = [0.4, 0.6, 0.5]; py = -0.28; px = 0.24; pz = -0.36; if (PL.dig > 0) { const d = Math.abs(Math.sin(t * 6)); F = [-0.3, -0.5 - d * 0.4, -0.8 + d * 0.3]; py -= d * 0.1; pz += d * 0.06; a = 1; } }
+  if (k === 'rod') { F = [-0.08, 0.9 - (PL.cast && PL.cast.bite ? 0.15 * Math.abs(Math.sin(t * 30)) : 0), -0.6]; U = [0.2, 0.3, 1]; }
+  if (k === 'hammer') { F = [-0.2, 0.6, -0.8]; }
+  if (k === 'spyglass') { F = [0, 0, -1]; U = [0, 1, 0]; if (PL.ads === 2) { px = 0; py = -0.02; pz = -0.12; } }
+  if (['rum', 'ale', 'bucket', 'keg', 'dynamite', 'flare', 'cigar'].includes(k)) { F = [0, 0.1, -1]; U = [0, 1, 0]; py = -0.22; }
   PL.kick = Math.max(0, (PL.kick || 0) - dt * 2);
-  vmMesh && (vmMesh.position.set(x, y, z), vmMesh.rotation.set(rx, ry, rz));
-  vmArm.position.set(x + 0.02, y - 0.05, z + 0.22); vmArm.rotation.set(rx * 0.5, ry, 0);
+  vmRig.position.lerp(vmW.set(px, py, pz), a);
+  aimWrist(F, U, a);
+  // the forearm runs back out of frame toward the bottom right
+  vmE.set(vmRig.position.x + 0.16, vmRig.position.y - 0.3, vmRig.position.z + 0.2);
+  placeFore(vmFore, vmW.copy(vmRig.position), vmE);
+  // second hand on two-handed items: grip partway up the stock / shaft
+  const two = TWO[k] || (isGun && k !== 'pistol');
+  vmLeft.visible = vmForeL.visible = !!two;
+  if (two) { const along = k === 'shovel' ? 0.45 : k === 'keg' ? 0.0 : k === 'blunder' ? 0.2 : 0.32; vmL.set(0, -0.05, along + (k === 'keg' ? 0.2 : 0)); vmHand.localToWorld(vmL); VM.worldToLocal(vmL);
+    vmLeft.position.copy(vmL); vmLeft.quaternion.copy(vmHand.quaternion); vmLeft.rotateY(Math.PI * 0.1);
+    vmE.set(vmL.x - 0.14, vmL.y - 0.28, vmL.z + 0.2); placeFore(vmForeL, vmL, vmE); }
 }
 
 /* ---- inventory helpers ---- */
@@ -305,7 +354,7 @@ function throwItem(k) {
   if (!invTake(k, 1)) return;
   const eye = camera.position.clone(), dir = new THREE.Vector3(); camera.getWorldDirection(dir);
   const v = dir.clone().multiplyScalar(k === 'flare' ? 4 : 13).add(new THREE.Vector3(0, k === 'flare' ? 30 : 4, 0));
-  const m = new THREE.Mesh(k === 'keg' ? cyl(0.25, 0.28, 0.5, 10) : cyl(0.03, 0.03, 0.25, 6), k === 'keg' ? MAT.med : MAT.red); m.position.copy(eye).addScaledVector(dir, 0.6); scene.add(m);
+  const m = weaponMesh(k) || new THREE.Mesh(cyl(0.03, 0.03, 0.25, 6), MAT.red); if (k === 'keg') m.scale.setScalar(1.5); m.position.copy(eye).addScaledVector(dir, 0.6); scene.add(m);
   THROWN.push({ k, m, v, t: 0 }); sfx.whoosh(camera);
   if (k === 'dynamite') say('Fuse lit — three seconds!', 1.5);
 }
@@ -410,7 +459,7 @@ function dropCarry() {
   netSend({ t: 'oc', o });;
   carryMesh.visible = false;
 }
-const carryMesh = new THREE.Mesh(box(0.9, 0.55, 0.55), MAT.med); carryMesh.visible = false; camera.add(carryMesh); carryMesh.position.set(0, -0.55, -0.75);
+const carryMesh = new THREE.Mesh(box(0.9, 0.55, 0.55), MAT.med); carryMesh.visible = false; vmAnchor.add(carryMesh); carryMesh.position.set(0, -0.55, -0.75);
 
 /* ---- crow's nest ---- */
 function climbNest() {

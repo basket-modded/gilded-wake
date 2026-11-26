@@ -273,10 +273,10 @@ function foamTex(){
 /* ================= MATERIALS ================= */
 function tx(t,rx=1,ry=1){const c=t.clone();c.needsUpdate=true;c.repeat.set(rx,ry);return c;}
 const MAT={
-  deck:new THREE.MeshStandardMaterial({map:tx(deckTex),roughness:0.82,metalness:0,envMapIntensity:0.45}),
-  dark:new THREE.MeshStandardMaterial({map:tx(darkTex),roughness:0.75,envMapIntensity:0.45}),
-  med:new THREE.MeshStandardMaterial({map:tx(medTex),roughness:0.78,envMapIntensity:0.45}),
-  hull:new THREE.MeshStandardMaterial({map:hullTex,vertexColors:true,roughness:0.7,side:THREE.DoubleSide,envMapIntensity:0.5}),
+  deck:new THREE.MeshStandardMaterial({map:tx(deckTex),roughness:0.82,metalness:0,envMapIntensity:0.75}),
+  dark:new THREE.MeshStandardMaterial({map:tx(darkTex),roughness:0.75,envMapIntensity:0.75}),
+  med:new THREE.MeshStandardMaterial({map:tx(medTex),roughness:0.78,envMapIntensity:0.75}),
+  hull:new THREE.MeshStandardMaterial({map:hullTex,vertexColors:true,roughness:0.62,side:THREE.DoubleSide,envMapIntensity:1.0}),
   crate:new THREE.MeshStandardMaterial({map:crateTex,roughness:0.85,envMapIntensity:0.45}),
   grating:new THREE.MeshStandardMaterial({map:tx(gratingTex,1.5,1.5),roughness:0.85}),
   rope:new THREE.MeshStandardMaterial({color:0x3b2a1c,roughness:1,envMapIntensity:0.5}),
@@ -677,18 +677,20 @@ candle.flame.position.set(-1.0,DECK+1.02,9.45);candle.flame.scale.set(0.12,0.2,1
 /* ================= WATER ================= */
 const WAVES=[[1,0.3,0.12,60],[0.6,1,0.12,31],[-0.4,1,0.11,18],[1,-0.7,0.09,11],[-0.8,-0.3,0.07,6.5]];
 const waterU={uTime:{value:0},uOffset:{value:new THREE.Vector2()},uW:{value:WAVES.map(w=>new THREE.Vector4(w[0],w[1],w[2],w[3]))},uAmp:{value:1},
-  uSunDir:{value:sunDir},uSunI:{value:1},uSunColor:{value:new THREE.Color()},uNorm:{value:waterNormalTex()},uFoam:{value:foamTex()},uHeading:{value:0},uSpeed:{value:1},uDetail:{value:1},uShips:{value:Array.from({length:8},()=>new THREE.Vector4())},uShipS:{value:new Array(8).fill(1)},uShipN:{value:1},uNight:U_NIGHT,uFogW:U_FOG,uMoonDir:U_MOON};
-const waterMat=new THREE.ShaderMaterial({uniforms:waterU,
-  vertexShader:`uniform float uTime,uAmp;uniform vec2 uOffset;uniform vec4 uW[5];
+  uSunDir:{value:sunDir},uSunI:{value:1},uSunColor:{value:new THREE.Color()},uNorm:{value:waterNormalTex()},uFoam:{value:foamTex()},uHeading:{value:0},uSpeed:{value:1},uDetail:{value:1},uShips:{value:Array.from({length:8},()=>new THREE.Vector4())},uShipS:{value:new Array(8).fill(1)},uShipN:{value:1},uNight:U_NIGHT,uFogW:U_FOG,uMoonDir:U_MOON,uCoast:{value:null},uCoastR:{value:new THREE.Vector4(0,0,1,1)},uUnder:{value:0}};
+const waterMat=new THREE.ShaderMaterial({uniforms:waterU,side:THREE.DoubleSide,
+  vertexShader:`uniform float uTime,uAmp;uniform vec2 uOffset;uniform vec4 uW[5];uniform sampler2D uCoast;uniform vec4 uCoastR;
   varying vec3 vWorld,vN;varying float vH;
   void main(){vec3 p=position;float dist=length(p.xz);vec2 q=p.xz+uOffset;
+    vec2 cuv=(q-uCoastR.xy)/uCoastR.zw;float cdep=40.0;if(cuv.x>0.0&&cuv.y>0.0&&cuv.x<1.0&&cuv.y<1.0)cdep=-(texture2D(uCoast,cuv).r*48.0-40.0);
+    float calm=mix(0.22,1.0,smoothstep(0.3,14.0,cdep));
     vec3 disp=vec3(0.0),tg=vec3(1.0,0.0,0.0),bn=vec3(0.0,0.0,1.0);
-    for(int i=0;i<5;i++){vec4 w=uW[i];float L=w.w;float fade=1.0-smoothstep(L*6.0,L*16.0,dist);float s=w.z*uAmp*fade;
+    for(int i=0;i<5;i++){vec4 w=uW[i];float L=w.w;float fade=1.0-smoothstep(L*6.0,L*16.0,dist);float s=w.z*uAmp*fade*calm;
       float k=6.28318/L;float c=sqrt(9.8/k);vec2 d=normalize(w.xy);float f=k*(dot(d,q)-c*uTime);float a=s/k;float sf=sin(f),cf=cos(f);
       disp+=vec3(d.x*a*cf,a*sf,d.y*a*cf);tg+=vec3(-d.x*d.x*s*sf,d.x*s*cf,-d.x*d.y*s*sf);bn+=vec3(-d.x*d.y*s*sf,d.y*s*cf,-d.y*d.y*s*sf);}
     p+=disp;vH=disp.y;vN=normalize(cross(bn,tg));vec4 wp=modelMatrix*vec4(p,1.0);vWorld=wp.xyz;gl_Position=projectionMatrix*viewMatrix*wp;}`,
   fragmentShader:SKY_GLSL+`
-  uniform sampler2D uNorm,uFoam;uniform float uTime,uHeading,uSpeed,uDetail;uniform vec4 uShips[8];uniform float uShipS[8];uniform int uShipN;uniform vec2 uOffset;uniform vec3 uSunColor;
+  uniform sampler2D uNorm,uFoam,uCoast;uniform vec4 uCoastR;uniform float uUnder;uniform float uTime,uHeading,uSpeed,uDetail;uniform vec4 uShips[8];uniform float uShipS[8];uniform int uShipN;uniform vec2 uOffset;uniform vec3 uSunColor;
   varying vec3 vWorld,vN;varying float vH;
   void main(){
     vec3 V=cameraPosition-vWorld;float dist=length(V);V/=dist;
@@ -705,7 +707,14 @@ const waterMat=new THREE.ShaderMaterial({uniforms:waterU,
     vec3 deep=vec3(0.008,0.03,0.05)*(0.45+0.55*uSunI);
     vec3 toSun=normalize(vec3(uSunDir.x,0.15,uSunDir.z));
     vec3 scatter=vec3(0.05,0.2,0.18)*clamp(vH*0.6+0.35,0.0,1.2)*uSunI*(0.25+1.2*pow(max(dot(-V,toSun),0.0),4.0));
-    vec3 col=mix(deep+scatter,refl,fres);
+    // shallows: sand and turquoise show through, caustic light dances on the bottom
+    vec2 cuv=(wp-uCoastR.xy)/uCoastR.zw;float depth=40.0;if(cuv.x>0.0&&cuv.y>0.0&&cuv.x<1.0&&cuv.y<1.0)depth=max(-(texture2D(uCoast,cuv).r*48.0-40.0),0.0);
+    float shallow=1.0-smoothstep(0.0,11.0,depth);
+    float caus=texture2D(uNorm,wp*0.21+vec2(uTime*0.03,-uTime*0.02)).z*texture2D(uNorm,wp*0.17-vec2(uTime*0.025,uTime*0.018)).z;
+    vec3 lit=(0.35+0.65*uSunI)*(1.0-0.85*uNight)*vec3(1.0,0.96,0.92);
+    vec3 sandC=vec3(0.62,0.56,0.4)*lit*(0.85+caus*0.6*uSunI), turq=vec3(0.06,0.36,0.36)*lit;
+    vec3 shallowC=mix(turq,sandC,exp(-depth*0.32))+scatter*0.5;
+    vec3 col=mix(mix(deep+scatter,shallowC,shallow),refl,fres*(1.0-shallow*0.45));
     vec3 H=normalize(uSunDir+V);float nh=max(dot(n,H),0.0);
     col+=uSunColor*(pow(nh,700.0)*45.0+pow(nh,90.0)*0.7)*smoothstep(-0.02,0.02,uSunDir.y)*(1.0-uFogW*0.7);
     col+=vec3(0.6,0.65,0.8)*pow(max(dot(n,normalize(uMoonDir+V)),0.0),300.0)*4.0*uNight*(1.0-uFogW);
@@ -726,13 +735,18 @@ const waterMat=new THREE.ShaderMaterial({uniforms:waterU,
       if(bz>0.0){wake+=smoothstep(1.8,0.0,abs(abs(lw.x)-bz*0.36-1.2))*exp(-bz/95.0)*sp*0.8;}
     }
     wake=clamp(wake,0.0,1.0);
-    float foam=clamp(crest+wake*smoothstep(0.2,0.75,fA*0.6+fB*0.6),0.0,1.0)*(1.0-smoothstep(250.0,1000.0,dist));
+    // surf: lines of foam roll in and break along the shore
+    float roll=sin(depth*1.9-uTime*1.4+fA*2.5)*0.5+0.5;
+    float surf=smoothstep(3.2,0.4,depth)*smoothstep(0.55,0.95,roll)*smoothstep(0.25,0.6,fB+fA*0.4)+smoothstep(0.7,0.0,depth)*0.9;
+    wake=clamp(wake+surf*(1.0-smoothstep(80.0,600.0,dist)),0.0,1.0);
+    float foam=clamp(crest+wake*smoothstep(0.15,0.7,fA*0.6+fB*0.6+surf*0.3),0.0,1.0)*(1.0-smoothstep(250.0,1000.0,dist));
     vec3 foamCol=vec3(0.92,0.86,0.8)*(0.3+0.7*uSunI)*(0.65+0.35*normalize(uSunColor+0.001));
     foamCol+=uSunColor*0.08*max(dot(n,uSunDir),0.0);
     col=mix(col,foamCol,foam*0.85);
     vec3 hz=skyBase(normalize(vec3(-V.x,0.0,-V.z)));
     float fog=1.0-exp(-dist*(0.00045+uFogW*0.005));
     col=mix(col,hz,clamp(fog*fog*1.25+uFogW*fog,0.0,1.0));
+    if(uUnder>0.5){float uf=1.0-exp(-dist*0.06);vec3 ceil=vec3(0.32,0.62,0.6)*(0.25+0.75*uSunI)*(0.75+0.5*caus)+uSunColor*pow(max(dot(-V,uSunDir),0.0),12.0)*0.6;col=mix(ceil,vec3(0.02,0.12,0.14)*(0.3+0.7*uSunI),clamp(uf,0.0,0.98));}
     gl_FragColor=vec4(col,1.0);
     `+TAIL+`}`});
 function waterGeo(N){

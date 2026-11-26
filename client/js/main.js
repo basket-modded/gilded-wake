@@ -37,8 +37,8 @@ function setMode(m) {
   if (m === 'helm' && (!OWN.has || PL.plat !== OWN || OWN.sk)) return;
   blendFrom.p.copy(camera.position); blendFrom.q.copy(camera.quaternion); blendT = 0;
   if (PL.mode === 'spy') { spyMesh.visible = true; $('#spy').classList.remove('on'); }
-  if (m === 'walk' && PL.mode === 'helm') { if (OWN.row) PL.l.set(0, 0.32, 1.2); else PL.l.set(0, QD, 12.35); PL.eyeY = PL.l.y; PL.yaw = 0; PL.pitch = -0.05; PL.vx = PL.vz = 0; }
-  if (m === 'helm') { sfx.creak(0.14, helm.grp, 0.5); if (OWN.row) PL.l.set(0, 0.32, 1.2); else PL.l.set(0, QD, 12.35); PL.eyeY = PL.l.y; CAM.hs = heading; }
+  if (m === 'walk' && PL.mode === 'helm') { if (OWN.row) PL.l.set(0, -0.05, 1.2); else PL.l.set(0, QD, 12.35); PL.eyeY = PL.l.y; PL.yaw = 0; PL.pitch = -0.05; PL.vx = PL.vz = 0; }
+  if (m === 'helm') { sfx.creak(0.14, helm.grp, 0.5); if (OWN.row) PL.l.set(0, -0.05, 1.2); else PL.l.set(0, QD, 12.35); PL.eyeY = PL.l.y; CAM.hs = heading; }
   PL.mode = m;
   document.body.classList.toggle('captain', m === 'helm');
   $('#compass').classList.toggle('on', m === 'helm' || m === 'nest');
@@ -342,7 +342,7 @@ function buildPeerTemplate() {
 function addPeer(info) {
   if (info.id === NET.id) return;
   if (PEERS.has(info.id)) removePeer(info.id);
-  const av = makeAvatar({ coat: info.color, hat: 1 }); scene.add(av.root); av.root.visible = false;
+  const av = makeAvatar({ coat: info.color, style: 'captain', seed: [...String(info.id)].reduce((h, c) => h * 31 + c.charCodeAt(0) >>> 0, 7) }); scene.add(av.root); av.root.visible = false;
   const T = makeTag(av.root, 2.35);
   PEERS.set(info.id, { id: info.id, name: info.name, color: info.color, score: info.score || 0, av, T, ship: null, jb: null, pp: '', lx: 0, ly: 0, lz: 0, wo: new THREE.Vector2(info.x || 0, info.z || 0), oy: 0, yaw: 0, mode: 'helm', wpn: '', alive: 1, act: '', bounty: 0, hp: 100, init: 0, lastAct: '' });
 }
@@ -783,6 +783,7 @@ const camPos = new THREE.Vector3(), camQuat = new THREE.Quaternion(), fromPos = 
 let last = performance.now(), fpsAcc = 0, fpsN = 0, fpsShow = 0, ftEMA = 16.7, adaptT = 0, autoCheck = null, saveTick = 20, bountyT = 0;
 const focusV = new THREE.Vector2();
 function computeFocus() {
+  if (window.__cam) { focusV.set(__cam.x, __cam.z); return; }
   if (state === 'title' || state === 'yard') { const I = ISLES[0]; focusV.set(I.dockEnd.x, I.dockEnd.z); return; }
   if ((PL.mode === 'helm' || PL.mode === 'cannon' && PL.gunEnt === OWN) && OWN.has) { focusV.copy(shipO); return; }
   const p = playerOcean(); focusV.set(p.x, p.z);
@@ -796,14 +797,14 @@ function tick(now) {
   computeFocus(); lastOrg.copy(org); org.copy(focusV); dOrg.subVectors(org, lastOrg); if (dOrg.length() > 200) dOrg.set(0, 0);
   WORLD.position.set(-org.x, 0, -org.y);
   if (S.timeMode === 'sunset' && S.drift && state !== 'title') sunElev = Math.max(1.2, sunElev - dt * 0.006);
-  updateEnvironment(dt);
+  updateEnvironment(dt); TIME.value = clock; WIND.value = clock;
   if (Math.abs(sunElev - envElev) > 0.6) updateEnv();
   const si = sunI.v, lightning = ENV.light || 0;
-  sun.color.copy(sunCol); sun.intensity = (0.8 + 5.2 * sstep(-0.5, 9, sunElev)) * (1 - ENV.fog * 0.5 - ENV.storm * 0.4) + lightning * 6;
-  hemi.intensity = 0.08 + 0.08 * si + ENV.night * 0.06 + lightning * 0.6;
+  sun.color.copy(sunCol); sun.intensity = (0.7 + 3.3 * sstep(-0.5, 9, sunElev)) * (1 - ENV.fog * 0.5 - ENV.storm * 0.4) + lightning * 5;
+  hemi.intensity = 0.32 + 0.22 * si + ENV.night * 0.1 + lightning * 0.6; hemi.color.setRGB(0.58 + 0.2 * si, 0.56 + 0.18 * si, 0.72); hemi.groundColor.setRGB(0.22, 0.18, 0.12);
   skyU.uSunI.value = si; skyU.uTime.value = clock; waterU.uSunI.value = si; terrainMat.uniforms && terrainMat.uniforms.uSunI && (terrainMat.uniforms.uSunI.value = si);
   waterU.uSunColor.value.copy(sunCol).multiplyScalar(0.6 + 0.6 * si);
-  renderer.toneMappingExposure = (0.82 + 0.2 * (1 - sstep(2, 10, sunElev))) * (1 + ENV.night * 0.35);
+  renderer.toneMappingExposure = (0.92 + 0.2 * (1 - sstep(2, 10, sunElev))) * (1 + ENV.night * 0.35);
   // my ship
   const steering = PL.mode === 'helm' && state === 'play' && !OWN.sk && !chatOpen && !menuOpen && !uiOpen();
   const steer = steering ? clamp((keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + (coarse ? stick.x : 0), -1, 1) : 0;
@@ -820,7 +821,7 @@ function tick(now) {
   scene.updateMatrixWorld();
   updatePeerAvatars(dt, clock); updateNpcCrewVisuals(dt, clock); updateOwnCrew(dt, clock);
   if (basesDirty) rebuildBases();
-  updateObjects(dt, clock); updateSharks(dt, clock); updateThrown(dt); updateFlares(dt); updateDebris(dt);
+  cullWorld(dt); updateObjects(dt, clock); updateSharks(dt, clock); updateThrown(dt); updateFlares(dt); updateDebris(dt);
   updateBalls(dt); updateParticles(dt);
   // ghost ships bring their own fog
   let gf = 0; for (const e of ENTS.values()) if (e.type === 'ghost' && !e.sk) gf = Math.max(gf, sstep(1400, 350, e.dist) * 0.85); ghostFog = gf;
@@ -837,10 +838,12 @@ function tick(now) {
     else if (blendT < 1) { blendT = Math.min(1, blendT + dt / 0.9); const e = 1 - Math.pow(1 - blendT, 3); camPos.lerpVectors(blendFrom.p, camPos, e); camQuat.copy(blendFrom.q.clone().slerp(camQuat, e)); }
   }
   camera.position.copy(camPos); camera.quaternion.copy(camQuat);
+  if (window.__cam) { const C = __cam; camera.position.set(C.x - org.x, C.y, C.z - org.y); camera.lookAt(C.tx - org.x, C.ty, C.tz - org.y); if (C.fov && camera.fov !== C.fov) { camera.fov = C.fov; camera.updateProjectionMatrix(); } }
   if (shake > 0) { shake = Math.max(0, shake - dt * 1.6); camera.position.x += rand(-1, 1) * shake * 0.05; camera.position.y += rand(-1, 1) * shake * 0.05; }
   const fovT = PL.mode === 'spy' && state === 'play' ? 13 : PL.ads === 2 ? 16 : PL.ads === 1 ? S.fov * 0.8 : zoomHeld && PL.mode === 'helm' ? 28 : S.fov;
   if (Math.abs(camera.fov - fovT) > 0.05) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld();
+  { const uw = camera.position.y < waveH(camera.position.x, camera.position.z, seaT) - 0.04 ? 1 : 0; U_UNDER.value = uw; waterU.uUnder.value = uw; }
   updateViewModel(dt, clock);
   sky.position.copy(camera.position);
   const c = (PL.mode === 'helm' && OWN.has) ? ship.localToWorld(tmpV.set(0, 7, 0)) : tmpV.copy(camera.position);
@@ -861,6 +864,7 @@ function tick(now) {
   NET.pingT -= dt; if (NET.on && NET.pingT <= 0) { NET.pingT = 8; netSend({ t: 'ping', c: Date.now() }); }
   if (renderer.shadowMap.enabled) renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
+  if (VM.visible || carryMesh.visible) { syncViewModelScene(); renderer.autoClear = false; renderer.clearDepth(); renderer.render(VMS, camera); renderer.autoClear = true; }
   const ft = dt * 1000; ftEMA += (ft - ftEMA) * 0.05; fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { fpsShow = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; if (S.fps) $('#fps').innerHTML = `${fpsShow.toFixed(0)} fps<br>${(renderer.getPixelRatio()).toFixed(2)}× · ${S.resolved}<br>${renderer.info.render.calls} draws`; $('#fps').style.display = S.fps ? 'block' : 'none'; }
   if (S.adaptive && state !== 'title') { adaptT += dt; if (adaptT > 1.2) { adaptT = 0; if (ftEMA > 19 && dynScale > 0.55) { dynScale = Math.max(0.55, dynScale - 0.08); applySize(); } else if (ftEMA < 14.5 && dynScale < 1) { dynScale = Math.min(1, dynScale + 0.05); applySize(); } } }

@@ -1,6 +1,7 @@
 // The Gilded Wake — game data: items, ships, shops, recipes, building pieces.
 const ITEMS = {
   cutlass:  { n: 'Cutlass', cat: 'melee', dmg: 32, spd: 0.45, rng: 2.5, price: 150, w: 2 },
+  saber:    { n: 'Saber', cat: 'melee', dmg: 29, spd: 0.38, rng: 2.7, price: 210, w: 1.8 },
   dagger:   { n: 'Dagger', cat: 'melee', dmg: 19, spd: 0.27, rng: 2.0, price: 60, w: 1 },
   rapier:   { n: 'Rapier', cat: 'melee', dmg: 27, spd: 0.33, rng: 2.8, price: 280, w: 1.5 },
   axe:      { n: 'Boarding axe', cat: 'melee', dmg: 46, spd: 0.72, rng: 2.4, price: 220, w: 3, bdmg: 40 },
@@ -53,10 +54,10 @@ const ICON = { melee: '⚔', gun: '✦', ammo: '•', cannon: '●', throw: '✹
 
 const SHIP_CLASSES = {
   rowboat: { n: 'Rowboat', price: 0, hp: 50, speed: 2.4, turn: 0.55, guns: 0, scale: 1, crew: 0, slots: 6, desc: 'Free. Two oars and a lot of optimism.' },
-  sloop:   { n: 'Sloop', price: 1800, hp: 130, speed: 7.0, turn: 0.27, guns: 2, scale: 0.72, crew: 3, slots: 16, desc: 'Quick, nimble, lightly armed.' },
+  sloop:   { n: 'Sloop', price: 1800, hp: 130, speed: 7.0, turn: 0.27, guns: 2, scale: 0.84, crew: 3, slots: 16, desc: 'Quick, nimble, lightly armed.' },
   brig:    { n: 'Brigantine', price: 4200, hp: 220, speed: 6.2, turn: 0.21, guns: 3, scale: 1.0, crew: 6, slots: 24, desc: 'The Saltwren’s own class. A fine all-rounder.' },
-  galleon: { n: 'Galleon', price: 12500, hp: 400, speed: 5.2, turn: 0.15, guns: 5, scale: 1.3, crew: 10, slots: 40, desc: 'A floating treasury with teeth.' },
-  manowar: { n: 'Man-o’-War', price: 32000, hp: 700, speed: 4.6, turn: 0.115, guns: 7, scale: 1.65, crew: 16, slots: 60, desc: 'Seven guns a side. Kings fear it.' },
+  galleon: { n: 'Galleon', price: 12500, hp: 400, speed: 5.2, turn: 0.15, guns: 5, scale: 1.14, crew: 10, slots: 40, desc: 'A floating treasury with teeth.' },
+  manowar: { n: 'Man-o’-War', price: 32000, hp: 700, speed: 4.6, turn: 0.115, guns: 7, scale: 1.26, crew: 16, slots: 60, desc: 'Seven guns a side. Kings fear it.' },
 };
 const UPGRADES = {
   hull: { n: 'Reinforced hull', max: 3, cost: (c, l) => Math.round(c.price * 0.22 * (l + 1) + 200), desc: '+25% hull strength per level' },
@@ -73,7 +74,7 @@ const LOOKS = {
 
 const SHOPS = {
   tavern:   { n: 'The Drowned Gull — tavern', items: ['rum', 'ale', 'cigar', 'hardtack', 'c_mackerel'], crew: true, buyCats: ['fish', 'food'] },
-  armory:   { n: 'Gunsmith & blades', items: ['cutlass', 'dagger', 'rapier', 'axe', 'pistol', 'musket', 'blunder', 'shot'], buyCats: ['melee', 'gun'] },
+  armory:   { n: 'Gunsmith & blades', items: ['cutlass', 'saber', 'dagger', 'rapier', 'axe', 'pistol', 'musket', 'blunder', 'shot'], buyCats: ['melee', 'gun'] },
   chandler: { n: 'Ship’s chandler', items: ['ball', 'chain', 'grape', 'bomb', 'keg', 'dynamite', 'flare', 'plank', 'cloth', 'wood', 'metal', 'rope', 'powder', 'shovel', 'rod', 'hammer', 'spyglass', 'bucket'], buyCats: ['mat', 'cannon', 'tool', 'fish'] },
   fence:    { n: 'Black-market fence', items: ['bomb', 'keg', 'dynamite', 'musket', 'relic'], buyCats: ['treasure', 'fish', 'melee', 'gun', 'cannon', 'throw'], markup: 1.6, sellBonus: 1.25 },
   trader:   { n: 'Trading post', items: ['hardtack', 'rum', 'plank', 'wood', 'cargo'], buyCats: ['treasure', 'fish', 'food', 'mat'] },

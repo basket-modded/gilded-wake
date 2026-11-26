@@ -16,6 +16,27 @@ Play: https://gilded-wake.sickagent.workers.dev/ (add `?room=name` for a private
 - **Survival and fun**: fishing, cooking at campfires, rum (with consequences), cigars, sitting, waving, dancing, and tavern music.
 - **World**: ten islands with towns, wrecks, camps, wildlife and caves. There's a shared day and night cycle, and fog, rain and storms roll through.
 
+## Art direction
+
+Everything is modelled procedurally in code, from lathes, extruded profiles and lofted sections, with canvas-painted textures. Nothing is built from primitive boxes.
+
+- **Characters:** jointed bodies with faces, coats, waistcoats, sashes, tricorns, bicornes and bandanas. They animate walking, running, swimming, the helm, sword swings, blocking, digging and emotes.
+- **Weapons:** curved cutlass and saber, swept-hilt rapier, dagger, bearded axe, flintlock, musket and belled blunderbuss, plus a shovel, rod, hammer and spyglass. They're held in a first-person fist that renders in its own pass.
+- **Islands:**
+  - Textured terrain with wet sand and cliffs, plus a baked coast map. The coast map lets the sea draw turquoise shallows, caustics and breaking surf.
+  - Palms, jungle trees, ferns and grass that sway in the wind.
+  - Half-timbered towns and sea caves.
+- **Boats:** a lofted clinker rowboat, and lower gun decks on galleons and men-o'-war.
+- **Creatures:** countershaded sharks that swim with a flexing body, crabs, macaws and gulls.
+- **Atmosphere:**
+  - One sky-coloured horizon fog shared by every material.
+  - Underwater murk.
+  - Glowing windows and lanterns at night.
+- **Performance:**
+  - Vegetation is instanced in map cells with per-kind draw distances.
+  - Terrain has two LOD levels.
+  - Towns and camps are merged per material.
+
 ## Layout
 
 ```
@@ -23,6 +44,7 @@ client/            static game client (served by the Worker straight from this r
   index.html
   js/engine.js     renderer, sky, sea, the ship model, particles, sound
   js/data.js       items, ships, upgrades, shops, recipes, building pieces
+  js/art.js        textures, fog, characters, weapons and tools, creatures
   js/world.js      islands, towns, wrecks, caves, wildlife, day/night and weather
   js/entities.js   avatars, ships (own, other players, NPCs), gunnery, damage, sinking, NPC AI
   js/player.js     the player: movement, swimming, weapons, cannons, digging, fishing

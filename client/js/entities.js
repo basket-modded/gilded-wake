@@ -8,67 +8,7 @@ const ENTS = new Map();             // id -> ship entity (peers 'p:<id>', npcs '
 const balls = [];
 const MV = 74, RELOAD = 4.5;
 
-/* ---------- avatars (used by players, NPC crews, keepers) ---------- */
-const AVG = {
-  leg: (() => { const g = new THREE.BoxGeometry(0.17, 0.85, 0.2); g.translate(0, -0.42, 0); return g; })(),
-  arm: (() => { const g = new THREE.BoxGeometry(0.13, 0.7, 0.14); g.translate(0, -0.33, 0); return g; })(),
-  torso: new THREE.BoxGeometry(0.5, 0.68, 0.3), coat: (() => { const g = new THREE.CylinderGeometry(0.27, 0.36, 0.55, 8, 1, true); return g; })(),
-  head: new THREE.SphereGeometry(0.15, 10, 8), hat: (() => { const L = [new THREE.CylinderGeometry(0.3, 0.3, 0.04, 3), xf(new THREE.CylinderGeometry(0.13, 0.17, 0.16, 10), 0, 0.09, 0)]; L[0].rotateY(Math.PI / 6); return merge(L); })(),
-  band: new THREE.CylinderGeometry(0.158, 0.158, 0.06, 10), pouch: new THREE.SphereGeometry(0.1, 8, 6),
-};
-const AVM = { skin: new THREE.MeshStandardMaterial({ color: 0xc89878, roughness: 0.8 }), pants: new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.9 }), hat: new THREE.MeshStandardMaterial({ color: 0x1c1614, roughness: 0.85 }), gold: new THREE.MeshStandardMaterial({ color: 0xd4a23a, metalness: 0.8, roughness: 0.35 }), ghost: new THREE.MeshBasicMaterial({ color: 0x7dffc8, transparent: true, opacity: 0.45, depthWrite: false }) };
-const coatMats = new Map(); const coatMat = c => { if (!coatMats.has(c)) coatMats.set(c, new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 })); return coatMats.get(c); };
-function makeAvatar(o = {}) {
-  const root = new THREE.Group(), hip = new THREE.Group(); hip.position.y = 0.92; root.add(hip);
-  const ghost = o.ghost, cm = ghost ? AVM.ghost : coatMat(o.coat || '#7a2e1f');
-  const M = (g, m) => { const x = new THREE.Mesh(g, ghost ? AVM.ghost : m); x.castShadow = false; return x; };
-  const lL = M(AVG.leg, AVM.pants), lR = M(AVG.leg, AVM.pants); lL.position.x = -0.12; lR.position.x = 0.12; hip.add(lL, lR);
-  const chest = new THREE.Group(); hip.add(chest);
-  const torso = M(AVG.torso, cm); torso.position.y = 0.36; chest.add(torso);
-  const coat = M(AVG.coat, cm); coat.position.y = -0.02; chest.add(coat);
-  const head = new THREE.Group(); head.position.y = 0.86; chest.add(head);
-  head.add(M(AVG.head, AVM.skin));
-  if (o.hat !== 0) { const h = M(AVG.hat, AVM.hat); h.position.y = 0.12; head.add(h); } else { const b = M(AVG.band, coatMat('#9a2a22')); b.position.y = 0.06; head.add(b); }
-  const aL = new THREE.Group(), aR = new THREE.Group(); aL.position.set(-0.33, 0.66, 0); aR.position.set(0.33, 0.66, 0); chest.add(aL, aR);
-  aL.add(M(AVG.arm, cm)); aR.add(M(AVG.arm, cm));
-  const hand = new THREE.Group(); hand.position.set(0, -0.66, 0.04); aR.add(hand);
-  const pouch = M(AVG.pouch, AVM.gold); pouch.position.set(0.22, -0.05, 0.12); hip.add(pouch); pouch.visible = false;
-  return { root, hip, chest, head, lL, lR, aL, aR, hand, pouch, ph: Math.random() * 9, wpn: null, wk: '' };
-}
-const WPN_GEO = {};
-function weaponMesh(k) {
-  const it = ITEMS[k]; if (!it) return null;
-  const g = new THREE.Group();
-  if (it.cat === 'melee') { const blade = new THREE.Mesh(box(0.05, k === 'axe' ? 0.6 : k === 'dagger' ? 0.32 : 0.82, 0.015), MAT.iron); blade.position.y = k === 'dagger' ? 0.2 : 0.45; g.add(blade); const guard = new THREE.Mesh(box(0.16, 0.03, 0.05), MAT.brass); guard.position.y = 0.04; g.add(guard); const grip = new THREE.Mesh(box(0.04, 0.14, 0.04), MAT.leather); grip.position.y = -0.04; g.add(grip); if (k === 'axe') { const hd = new THREE.Mesh(box(0.22, 0.14, 0.02), MAT.iron); hd.position.set(0.1, 0.68, 0); g.add(hd); } }
-  else if (it.cat === 'gun') { const L = k === 'musket' ? 1.25 : k === 'blunder' ? 0.75 : 0.38; const bar = new THREE.Mesh(cyl(k === 'blunder' ? 0.04 : 0.022, 0.024, L, 8), MAT.iron); bar.rotation.x = Math.PI / 2; bar.position.z = -L / 2; g.add(bar); const stock = new THREE.Mesh(box(0.06, 0.1, k === 'pistol' ? 0.14 : 0.5), MAT.med); stock.position.set(0, -0.05, 0.12); g.add(stock); }
-  else if (k === 'shovel') { const h = new THREE.Mesh(cyl(0.02, 0.02, 1.1, 5), MAT.med); h.position.y = 0.3; g.add(h); const bl = new THREE.Mesh(box(0.22, 0.28, 0.02), MAT.iron); bl.position.y = -0.3; g.add(bl); }
-  else if (k === 'rod') { const r = new THREE.Mesh(cyl(0.008, 0.02, 1.8, 5), MAT.med); r.position.y = 0.8; g.add(r); }
-  else if (k === 'hammer') { const h = new THREE.Mesh(cyl(0.02, 0.02, 0.4, 5), MAT.med); h.position.y = 0.15; g.add(h); const hd = new THREE.Mesh(box(0.16, 0.07, 0.07), MAT.iron); hd.position.y = 0.36; g.add(hd); }
-  else if (k === 'spyglass') { const t = new THREE.Mesh(cyl(0.035, 0.03, 0.45, 8), MAT.brass); t.rotation.x = Math.PI / 2; g.add(t); }
-  else if (k === 'rum' || k === 'ale') { const b = new THREE.Mesh(cyl(0.04, 0.05, 0.2, 8), k === 'rum' ? MAT.bottle : MAT.med); g.add(b); }
-  else if (k === 'keg' || k === 'dynamite' || k === 'flare' || k === 'bucket') { const b = new THREE.Mesh(k === 'keg' ? cyl(0.18, 0.2, 0.36, 10) : cyl(0.03, 0.03, 0.22, 6), k === 'dynamite' || k === 'flare' ? MAT.red : MAT.med); g.add(b); }
-  else return null;
-  return g;
-}
-function setAvatarWeapon(av, k) { if (av.wk === k) return; av.wk = k; if (av.wpn) av.hand.remove(av.wpn); av.wpn = k ? weaponMesh(k) : null; if (av.wpn) { av.wpn.rotation.x = ITEMS[k] && ITEMS[k].cat === 'gun' ? -Math.PI / 2 : 0; av.hand.add(av.wpn); } }
-function animAvatar(av, s) {
-  const t = s.t || 0, sp = s.spd || 0; av.ph += sp * 0.05 + 0.016;
-  const w = Math.sin(av.ph * 4) * Math.min(1, sp / 2.5) * 0.7;
-  av.lL.rotation.x = w; av.lR.rotation.x = -w; av.aL.rotation.x = -w * 0.8; av.aR.rotation.x = w * 0.8;
-  av.hip.position.y = 0.92; av.chest.rotation.set(0, 0, 0); av.root.rotation.x = 0;
-  if (s.sit) { av.hip.position.y = 0.48; av.lL.rotation.x = av.lR.rotation.x = -1.45; }
-  if (s.swim) { av.root.rotation.x = -1.2; av.lL.rotation.x = Math.sin(t * 6) * 0.5; av.lR.rotation.x = -av.lL.rotation.x; av.aL.rotation.x = -2.5 + Math.sin(t * 3) * 0.8; av.aR.rotation.x = -2.5 - Math.sin(t * 3) * 0.8; return; }
-  if (s.helm) { av.aL.rotation.x = av.aR.rotation.x = -1.1; av.aL.rotation.z = -0.2; av.aR.rotation.z = 0.2; }
-  if (s.aim) { av.aR.rotation.x = -1.55; av.aL.rotation.x = s.two ? -1.35 : 0; }
-  if (s.swing > 0) { av.aR.rotation.x = -2.2 + (1 - s.swing) * 3; av.chest.rotation.y = (s.swing - 0.5) * 0.8; }
-  if (s.block) { av.aR.rotation.x = -1.4; av.aR.rotation.z = 0.9; }
-  if (s.dig) { av.aL.rotation.x = av.aR.rotation.x = -0.6 - Math.abs(Math.sin(t * 4)) * 0.9; av.chest.rotation.x = 0.4; }
-  if (s.wave) { av.aL.rotation.z = -2.6 + Math.sin(t * 9) * 0.35; }
-  if (s.dance) { av.chest.rotation.y = Math.sin(t * 6) * 0.5; av.aL.rotation.z = -1.2 + Math.sin(t * 6) * 0.6; av.aR.rotation.z = 1.2 + Math.sin(t * 6 + 1) * 0.6; av.hip.position.y = 0.9 + Math.abs(Math.sin(t * 6)) * 0.08; }
-  if (s.drunk) { av.chest.rotation.z = Math.sin(t * 1.7) * 0.15 * s.drunk; }
-  if (s.idle) { av.chest.rotation.y = Math.sin(t * 0.4) * 0.2; av.head.rotation.y = Math.sin(t * 0.3) * 0.5; }
-  if (s.dead) { av.root.rotation.x = -1.5; }
-}
+/* avatars, weapons and tools live in art.js */
 
 /* ---------- ship classes, stats and looks ---------- */
 function shipStats(rec) {
@@ -93,25 +33,68 @@ function flagTexture(design, color) {
   g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.moveTo(256, 0); for (let y = 0; y <= 160; y += 10) g.lineTo(256 - Math.random() * 20 - (y > 90 ? 14 : 0), y); g.lineTo(256, 160); g.fill();
   const t = mkTex(c, false); flagTexCache.set(key, t); return t;
 }
-/* rowboat model */
+/* rowboat model: a clinker-built hull lofted from cross-sections (bow toward -z) */
 const ROWG = (() => {
-  const pts = []; for (let i = 0; i <= 10; i++) { const t = i / 10; pts.push(new THREE.Vector2(Math.sin(t * Math.PI / 2) * 0.85 + 0.02, -0.45 + t * 0.85)); }
-  const hull = new THREE.LatheGeometry(pts, 14, 0, Math.PI); hull.rotateZ(Math.PI); hull.scale(1, 1, 1);
-  const p = hull.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const len = 2.6 * (1 - 0.0 * y); p.setXYZ(i, z * 1.0, -y * 0.75 + 0.1, x * len / 0.87); }
-  // lathe gave a half-shell; stretch along z so it is boat-shaped
-  hull.computeVertexNormals();
-  const seats = [xf(box(1.5, 0.06, 0.32), 0, 0.15, -0.8), xf(box(1.5, 0.06, 0.32), 0, 0.15, 0.6), xf(box(1.0, 0.06, 0.3), 0, 0.15, 1.8)];
-  return { hull, seats: merge(seats), oar: (() => { const g = merge([xf(cyl(0.025, 0.025, 2.4, 5), 0, 0, 0, 0, 0, Math.PI / 2), xf(box(0.45, 0.02, 0.14), -1.15, 0, 0)]); return g; })() };
+  const N = 22, M = 14, T = 0.035;
+  const st = t => { // t: 0 bow → 1 stern; returns half-beam, keel height, sheer height, z
+    const z = lerp(-2.25, 2.05, t);
+    const b = 0.74 * Math.pow(Math.sin(Math.PI * Math.min(1, t * 0.8 + 0.04)), 0.55) * (t > 0.9 ? 1 : 1) + (t > 0.85 ? (t - 0.85) * 0.2 : 0);
+    const k = -0.26 + 0.2 * Math.pow(1 - t, 3) + 0.05 * Math.pow(t, 4);
+    const sh = 0.44 + 0.2 * Math.pow(1 - t, 2.5) + 0.06 * Math.pow(t, 3);
+    return { z, b: t < 0.02 ? 0.01 : b, k, sh };
+  };
+  const shell = (inset) => { const pos = [], uv = [], idx = [];
+    for (let i = 0; i <= N; i++) { const t = i / N, S = st(t); for (let j = 0; j <= M; j++) { const u = j / M * 2 - 1; const bb = Math.max(0.005, S.b - inset), kk = S.k + inset;
+        const y = kk + (S.sh - kk) * (1 - Math.sqrt(Math.max(0, 1 - u * u))); pos.push(bb * u * (1 + 0.04 * (1 - Math.abs(u))), Math.min(y, S.sh), S.z); uv.push(t * 4.3, j / M * 7); } }
+    for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + M + 1; if (inset) idx.push(a, a + 1, b, a + 1, b + 1, b); else idx.push(a, b, a + 1, a + 1, b, b + 1); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g; };
+  const hull = merge([shell(0), shell(T)]);
+  // gunwale rails following the sheer, transom board, stem post and keel
+  const rail = [], keelPts = [];
+  for (const sx of [-1, 1]) { const P = []; for (let i = 0; i <= N; i++) { const S = st(i / N); P.push([sx * (S.b - T / 2), S.sh + 0.02, S.z]); } rail.push(tubeG(P, 0.035, 30, 5)); }
+  for (let i = 0; i <= N; i++) { const S = st(i / N); keelPts.push([0, S.k - 0.03, S.z]); }
+  rail.push(tubeG(keelPts, 0.04, 26, 5));
+  const S1 = st(1), S0 = st(0.02);
+  const tr = new THREE.Shape(); tr.moveTo(-S1.b, S1.sh); for (let j = 0; j <= 10; j++) { const u = j / 10 * 2 - 1; tr.lineTo(S1.b * u, S1.k + (S1.sh - S1.k) * (1 - Math.sqrt(1 - u * u))); } tr.closePath();
+  const transom = new THREE.ExtrudeGeometry(tr, { depth: 0.05, bevelEnabled: false }); transom.translate(0, 0, S1.z - 0.02);
+  const stem = tubeG([[0, S0.k - 0.02, S0.z + 0.05], [0, (S0.k + S0.sh) / 2, S0.z - 0.06], [0, S0.sh + 0.12, S0.z - 0.12]], 0.05, 8, 5);
+  const floor = []; for (let i = 0; i < 7; i++) floor.push(xf(box(0.11, 0.025, 3.0), -0.33 + i * 0.11, -0.07, 0.05));
+  const seats = [xf(box(1.36, 0.05, 0.28), 0, 0.17, -0.7), xf(box(1.42, 0.05, 0.28), 0, 0.17, 0.35), xf(box(1.12, 0.05, 0.5), 0, 0.2, 1.55)];
+  for (const z of [-0.7, 0.35]) for (const sx of [-1, 1]) seats.push(xf(box(0.06, 0.25, 0.06), sx * 0.55, 0.05, z));
+  const locks = []; for (const sx of [-1, 1]) { locks.push(xf(box(0.06, 0.08, 0.2), sx * 0.72, 0.49, -0.2), xf(cyl(0.012, 0.012, 0.16, 6), sx * 0.72, 0.6, -0.26), xf(cyl(0.012, 0.012, 0.16, 6), sx * 0.72, 0.6, -0.14)); }
+  const oar = merge([xf(lathe([[0.001, -1.3], [0.022, -1.28], [0.026, -0.2], [0.03, 0.4], [0.024, 1.15], [0.03, 1.2], [0.001, 1.22]], 8), 0, 0, 0, 0, 0, -Math.PI / 2),
+    xf(profile([[-0.08, 0], [0.08, 0], [0.09, 0.45], [0.0, 0.52], [-0.09, 0.45]], 0.014, 0.004), -1.25, 0, 0, 0, 0, Math.PI / 2)]);
+  return { hull, rails: merge(rail), transom: merge([transom, stem]), floor: merge(floor), seats: merge(seats), locks: merge(locks), oar };
 })();
+const rowTex = canvasTex(256, 256, (g, w, h) => { for (let y = 0; y < h; y += 256 / 7) { const k = 0.85 + Math.random() * 0.25; g.fillStyle = `rgb(${190 * k},${150 * k},${105 * k})`; g.fillRect(0, y, w, 256 / 7);
+  for (let i = 0; i < 30; i++) { g.fillStyle = `rgba(60,35,15,${Math.random() * 0.2})`; g.fillRect(Math.random() * w, y + Math.random() * 30, 20 + Math.random() * 60, 1); } g.fillStyle = 'rgba(30,18,8,0.7)'; g.fillRect(0, y + 256 / 7 - 3, w, 3); g.fillStyle = 'rgba(255,230,190,0.18)'; g.fillRect(0, y, w, 2);
+  for (let x = 8; x < w; x += 32) { g.fillStyle = 'rgba(40,30,20,0.6)'; g.beginPath(); g.arc(x + (y % 2) * 16, y + 256 / 7 - 6, 1.6, 0, TAU); g.fill(); } } });
 function makeRowboat(color) {
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  const h = new THREE.Mesh(ROWG.hull, MAT.med); h.material = new THREE.MeshStandardMaterial({ map: MAT.med.map, color: new THREE.Color(color || '#ffffff'), roughness: 0.8, side: THREE.DoubleSide }); body.add(h);
-  body.add(new THREE.Mesh(ROWG.seats, MAT.dark));
-  const oL = new THREE.Group(), oR = new THREE.Group(); oL.position.set(-0.78, 0.35, -0.2); oR.position.set(0.78, 0.35, -0.2); oR.rotation.y = Math.PI; body.add(oL, oR);
-  oL.add(new THREE.Mesh(ROWG.oar, MAT.med)); oR.add(new THREE.Mesh(ROWG.oar, MAT.med));
-  oL.children[0].position.x = -0.9; oR.children[0].position.x = -0.9;
+  const hm = stdMat({ map: rowTex, color: new THREE.Color(color || '#ffffff'), roughness: 0.75, side: THREE.DoubleSide });
+  const add = (g, m) => { const x = new THREE.Mesh(g, m); x.castShadow = x.receiveShadow = true; body.add(x); return x; };
+  add(ROWG.hull, hm); add(ROWG.rails, CM.dwood); add(ROWG.transom, CM.dwood); add(ROWG.floor, BLD_WOOD()); add(ROWG.seats, CM.wood); add(ROWG.locks, CM.dsteel);
+  const oL = new THREE.Group(), oR = new THREE.Group(); oL.position.set(-0.72, 0.6, -0.2); oR.position.set(0.72, 0.6, -0.2); oR.rotation.y = Math.PI; body.add(oL, oR);
+  for (const o of [oL, oR]) { const m = new THREE.Mesh(ROWG.oar, CM.ash); m.position.x = -0.25; m.rotation.z = 0.32; m.castShadow = true; o.add(m); }
   return { root, body, oL, oR, scale: 1, row: true };
 }
+function rowOars(v, t, amt) { const a = Math.min(1, Math.abs(amt)), sw = Math.sin(t * 3) * 0.55 * a, dp = Math.cos(t * 3) * 0.18 * a; v.oL.rotation.set(0, sw, 0.0 + dp); v.oR.rotation.set(0, Math.PI - sw, -dp); }
+function BLD_WOOD() { return BLD_WOOD.m || (BLD_WOOD.m = stdMat({ map: TEX.wood, color: 0x8a6a48, roughness: 0.85 })); }
+/* lower gun decks for galleons and men-o'-war: a painted strake, open ports with red lids and run-out guns */
+const GUNDECK = {};
+function gunDeckGeo(rows) {
+  if (GUNDECK[rows]) return GUNDECK[rows];
+  const port = [], lid = [], muz = [], band = [];
+  for (let r = 0; r < rows; r++) { const y = DECK - 0.95 - r * 0.95;
+    for (let z = -9.2; z <= 7.6; z += 2.1) for (const sg of [1, -1]) { const s2 = (topY(z) - y) / (topY(z) - keelY(z)); const [x] = secPt(z, s2);
+      port.push(xf(box(0.08, 0.5, 0.56), sg * (x + 0.02), y, z)); lid.push(xf(box(0.05, 0.52, 0.6), sg * (x + 0.06), y + 0.42, z, 0, 0, sg * -1.0));
+      muz.push(xf(cyl(0.11, 0.13, 0.55, 10), sg * (x + 0.2), y - 0.02, z, 0, 0, Math.PI / 2)); muz.push(xf(cyl(0.15, 0.15, 0.08, 10), sg * (x + 0.46), y - 0.02, z, 0, 0, Math.PI / 2)); }
+    for (let z = -11; z < 9.5; z += 0.7) for (const sg of [1, -1]) { const s2 = (topY(z) - y) / (topY(z) - keelY(z)); const [x] = secPt(z, s2); band.push(xf(box(0.04, 0.85, 0.72), sg * (x + 0.012), y + 0.02, z)); } }
+  return (GUNDECK[rows] = { port: merge(port), lid: merge(lid), muz: merge(muz), band: merge(band) });
+}
+const GD_M = { port: new THREE.MeshStandardMaterial({ color: 0x0c0806, roughness: 1 }), lid: stdMat({ color: 0x8a2418, roughness: 0.7 }), band: stdMat({ map: TEX.wood, color: 0xb88a3a, roughness: 0.7 }) };
+function addGunDecks(parent, cls) { const rows = cls === 'manowar' ? 2 : cls === 'galleon' ? 1 : 0; const g = new THREE.Group(); g.name = 'gundecks'; if (!rows) return g; const G = gunDeckGeo(rows);
+  g.add(new THREE.Mesh(G.band, GD_M.band), new THREE.Mesh(G.port, GD_M.port), new THREE.Mesh(G.lid, GD_M.lid), new THREE.Mesh(G.muz, MAT.iron)); g.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); parent.add(g); return g; }
 /* visuals for other ships, built from the merged Saltwren template */
 function makeShipVisual(look, clsKey, opt = {}) {
   if (clsKey === 'rowboat') { const v = makeRowboat(LOOKS.hull[look.hull || 0][0]); scene.add(v.root); return v; }
@@ -137,6 +120,7 @@ function makeShipVisual(look, clsKey, opt = {}) {
   const pen2 = fixedMesh(penGeo.clone(), pm, PEER_T.penM); body.add(pen2);
   for (const g of PEER_T.glows) { const s = new THREE.Sprite(PEER_T.glowMat); s.position.copy(g); s.scale.setScalar(1.2); body.add(s); }
   if (ghost) { const gl = new THREE.PointLight(0x3effb0, 2, 60, 2); gl.position.y = 10; body.add(gl); }
+  if (!ghost) addGunDecks(body, clsKey);
   // a mast group we can break: the main topmast is approximated by an extra spar
   return { root, body, sails: sails2, jibs: jibs2, flag: flag2, pen: pen2, sm, fm, scale: sc, ghost };
 }
@@ -181,6 +165,7 @@ function setOwnShip(rec) {
   const g = st.guns; cannons.forEach((C, i) => { C.grp.visible = !isRow && (i % 3) < Math.min(3, g); });
   OWN.guns = gunLayout(g);
   OWN.gready = OWN.guns.map(() => 0);
+  if (OWN.gd) ship.remove(OWN.gd); OWN.gd = isRow ? null : addGunDecks(ship, rec.cls);
 }
 
 /* ---------- other ships: shared update ---------- */
@@ -221,7 +206,7 @@ function updateRemoteShips(dt, t, g) {
     e.root.visible = e.dist < 3600; if (!e.root.visible) continue;
     if (e.sk) e.sinkT += dt;
     bobShip(e, dt, e.sl);
-    if (e.v.row) { e.v.oL.rotation.x = e.v.oR.rotation.x = Math.sin(t * 3) * 0.6 * Math.min(1, e.sp); }
+    if (e.v.row) rowOars(e.v, t, e.sp);
     const near = e.dist < 450 && !e.v.row;
     if (near && ((frame + e.fm) % 3 === 0)) {
       const sl = e.sl * (e.sail > 15 ? 1 : 0.3);
@@ -472,7 +457,7 @@ function bobOwn(dt, gNow) {
   const sk = OWN.sk ? OWN.sinkT : 0;
   ship.position.y = body.h - 0.1 - sk * sk * 0.11 * OWN.scale - OWN.flood * 1.2 * OWN.scale + (OWN.row ? 0.25 : 0);
   ship.rotation.set(body.p - sk * 0.035, 0, body.r + sk * 0.06 + OWN.flood * 0.06);
-  if (OWN.row) { rowOwn.oL.rotation.x = rowOwn.oR.rotation.x = Math.sin(clock * 3) * 0.6 * Math.min(1, Math.abs(speed)); }
+  if (OWN.row) rowOars(rowOwn, clock, speed);
   hcSwell = hc;
 }
 let hcSwell = 0;
@@ -701,7 +686,7 @@ function updateNpcCrewVisuals(dt, t) {
     if (e.kind !== 'npc') continue;
     const data = e.crewData || [], show = e.dist < 160 && !e.sk;
     const T = NPC_TYPES[e.type];
-    while (e.crewAv.length < data.length) { const av = makeAvatar({ coat: e.type === 'navy' ? '#26406b' : e.type === 'merchant' ? '#6b5a3a' : '#5a1f1a', hat: e.type === 'navy' ? 1 : (e.crewAv.length % 2), ghost: T.ghost }); setAvatarWeapon(av, 'cutlass'); e.body.add(av.root); av.root.scale.setScalar(1 / e.scale); e.crewAv.push(av); }
+    while (e.crewAv.length < data.length) { const av = makeAvatar({ coat: e.type === 'navy' ? '#26406b' : e.type === 'merchant' ? '#6b5a3a' : ['#5a1f1a', '#2a2a2a', '#4a3a22'][e.crewAv.length % 3], style: e.type === 'navy' ? (e.crewAv.length ? 'sailor' : 'navy') : e.crewAv.length === 0 ? 'captain' : 'sailor', seed: (e.id.length * 977 + e.crewAv.length * 131) | 0, ghost: T.ghost }); setAvatarWeapon(av, 'cutlass'); e.body.add(av.root); av.root.scale.setScalar(1 / e.scale); e.crewAv.push(av); }
     e.crewAv.forEach((av, i) => {
       const c = data[i]; av.root.visible = show && c && c[2] > 0;
       if (!av.root.visible) return;
@@ -731,7 +716,7 @@ function lowerJollyBoat() {
   JB.v.root.visible = true;
   const side = 1; JB.o.set(shipO.x + Math.cos(heading) * (5.5 * OWN.scale) * side, shipO.y - Math.sin(heading) * 5.5 * OWN.scale * side); JB.h = heading; JB.sp = 0;
   sfx.splash(5); sfx.ratchet(0);
-  PL.mode = 'row'; PL.plat = JBENT; PL.l.set(0, 0.35, 0.6); say('You lower the jolly boat and climb down. W/S to row, A/D to turn, E to step out.', 3.5);
+  PL.mode = 'row'; PL.plat = JBENT; PL.l.set(0, -0.05, 0.6); say('You lower the jolly boat and climb down. W/S to row, A/D to turn, E to step out.', 3.5);
 }
 const JBENT = { id: 'jb', kind: 'jb', get body() { return JB.v.body; }, scale: 1, row: true };
 function updateJollyBoat(dt) {
@@ -743,7 +728,7 @@ function updateJollyBoat(dt) {
   JB.o.x += -Math.sin(JB.h) * JB.sp * dt; JB.o.y += -Math.cos(JB.h) * JB.sp * dt;
   if (terrainH(JB.o.x, JB.o.y) > -0.4) { JB.sp *= 0.5; JB.o.x += Math.sin(JB.h) * 0.05; JB.o.y += Math.cos(JB.h) * 0.05; }
   const e = { o: JB.o, h: JB.h, root: JB.v.root, body: JB.v.body, b: JB.b, scale: 0.25 }; bobShip(e, dt, 0); JB.v.body.position.y += 0.3;
-  JB.v.oL.rotation.x = JB.v.oR.rotation.x = Math.sin(clock * 3) * 0.6 * Math.min(1, Math.abs(JB.sp));
+  rowOars(JB.v, clock, JB.sp);
   if (Math.abs(JB.sp) > 0.4 && Math.random() < dt * 2) sfx.stroke();
 }
 function hoistJollyBoat() { JB.on = 0; if (JB.v) JB.v.root.visible = false; sfx.ratchet(0); say('The jolly boat is hoisted aboard.', 1.8); }
