@@ -425,8 +425,43 @@ const rockMat=new THREE.ShaderMaterial({uniforms:UNI,defines:LOW?{}:{BUMP:1},
     float wl=vW.y-0.7*sin(uTime*1.15+(vL.x+vL.z)*0.045)-0.3*sin(uTime*2.3+vL.x*0.11);
     float foam=(1.0-smoothstep(0.0,1.2+1.5*side,wl))*step(-1.2,wl)*smoothstep(0.3,0.7,fine+0.25)*(1.0-smoothstep(900.0,2400.0,d));
     col=mix(col,vec3(0.8,0.82,0.85)*(0.16+0.5*uSunI)+sun*0.1*dif,foam*0.85);
-    col=mix(col,vHz,vFog);
+    float mist=exp(-max(vW.y,0.0)/(14.0+d*0.02))*smoothstep(250.0,2600.0,d)*0.9;
+    col=mix(col,vHz,clamp(vFog+mist*(1.0-vFog),0.0,1.0));
     gl_FragColor=vec4(col,1.0);`+S+"}"});
+/* water reflection: the rock mirrored in the sea surface. Screen position comes from the mirrored point,
+   depth from where that view ray meets the water, so ships and nearer rocks still hide it correctly. */
+const reflMat=new THREE.ShaderMaterial({uniforms:UNI,transparent:true,depthWrite:false,
+  vertexShader:b+`uniform float uView,uTime;attribute vec2 aT;varying vec3 vN,vHz,vIC,vP,vAmb;varying float vFog,vH,vD,vAO;
+  void main(){vec4 w=modelMatrix*instanceMatrix*vec4(position,1.0);mat3 im=mat3(instanceMatrix);
+    vN=normalize(mat3(modelMatrix)*(im*normal));vH=w.y;vAO=aT.x;vAmb=skyBase(vec3(0.0,1.0,0.0));
+    #ifdef USE_INSTANCING_COLOR
+    vIC=instanceColor;
+    #else
+    vIC=vec3(0.0);
+    #endif
+    vec3 mp=vec3(w.x,-w.y,w.z);
+    mp.x+=sin(w.z*0.03+uTime*0.9)*min(max(w.y,0.0),60.0)*0.035;
+    vec4 clip=projectionMatrix*viewMatrix*vec4(mp,1.0);
+    float hp=0.6,t=(cameraPosition.y-hp)/max(cameraPosition.y-mp.y,0.01);
+    vec3 pw=cameraPosition+(mp-cameraPosition)*clamp(t,0.0,1.0);vP=pw;
+    vec4 cw=projectionMatrix*viewMatrix*vec4(pw,1.0);
+    clip.z=(cw.z/cw.w)*clip.w;
+    ${VFOG}
+    vD=dv;gl_Position=clip;}`,
+  fragmentShader:`uniform vec3 uSunDir;uniform float uSunI;uniform vec3 uSunCol;uniform float uSunK,uTime;uniform sampler2D uDet;
+  varying vec3 vN,vHz,vIC,vP,vAmb;varying float vFog,vH,vD,vAO;
+  void main(){if(vH<0.0)discard;
+    vec3 N=normalize(vN);float pal=vIC.x;
+    vec3 base=vec3(0.085,0.08,0.075);if(pal>0.35)base=vec3(0.2,0.195,0.18);if(pal>0.8)base=vec3(0.13,0.11,0.09);
+    vec3 col=base*(0.75+0.5*vAO);
+    col*=uSunCol*uSunK*max(dot(N,uSunDir),0.0)*0.8+vAmb*0.5+vec3(0.012,0.015,0.022);
+    col=mix(col,col*0.6+vec3(0.0,0.012,0.018),0.5);
+    float mist=exp(-vH/(14.0+vD*0.02))*smoothstep(250.0,2600.0,vD)*0.9;
+    col=mix(col,vHz,clamp(vFog+mist*(1.0-vFog),0.0,1.0));
+    float rip=texture2D(uDet,vec2(vP.x*0.004,vP.z*0.045)+vec2(uTime*0.01,uTime*0.03)).r;
+    float a=(0.92-0.5*smoothstep(0.0,260.0,vH))*(0.55+0.45*smoothstep(0.25,0.7,rip));
+    a*=smoothstep(60.0,260.0,vD);
+    gl_FragColor=vec4(col,a);`+S+"}"});
 function foamMat(tex){return new THREE.ShaderMaterial({uniforms:Object.assign({uField:{value:tex}},UNI),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,
   vertexShader:b+`uniform float uTime,uAmp,uView;uniform vec2 uOffset;uniform vec4 uW[5];varying float vFog,vD,vS;varying vec3 vHz;varying vec2 vL,vUV;
   void main(){vec4 w=modelMatrix*instanceMatrix*vec4(position,1.0);vec2 q=w.xz+uOffset;float dist=length(w.xz),hy=0.0;
@@ -447,7 +482,7 @@ function foamMat(tex){return new THREE.ShaderMaterial({uniforms:Object.assign({u
     a*=1.0-smoothstep(SURF_D*0.75,SURF_D,vD);
     gl_FragColor=vec4(col,clamp(a,0.0,1.0)*0.88);`.replace(/SURF_D/g,SURF_D.toFixed(1))+S+"}"})}
 
-const B={hi:[],lo:[],xlo:[],fm:[]};
+const B={hi:[],lo:[],xlo:[],fm:[],rf:[]};
 function batch(g,mat,cap,col){const im=new THREE.InstancedMesh(g,mat,cap);im.frustumCulled=false;im.count=0;im.visible=false;im.matrixAutoUpdate=false;
   if(col)im.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(cap*3),3);y.add(im);return im}
 function geo(q){const g=new THREE.BufferGeometry;g.setAttribute("position",new THREE.BufferAttribute(q.pos,3));g.setAttribute("normal",new THREE.BufferAttribute(q.nrm,3));
@@ -456,7 +491,8 @@ const FPLANE=(()=>{const g=new THREE.PlaneGeometry(2.6,2.6,18,18);g.rotateX(-Mat
 function accept(r){const vi=r.id;
   const tex=new THREE.DataTexture(r.foam,r.FN,r.FN,THREE.RGBAFormat);tex.magFilter=tex.minFilter=THREE.LinearFilter;tex.needsUpdate=true;
   VAR[vi]=r;B.hi[vi]=batch(geo(r.hi),rockMat,12,1);B.lo[vi]=batch(geo(r.lo),rockMat,40,1);B.xlo[vi]=batch(geo(r.xlo),rockMat,120,1);
-  const f=batch(FPLANE,foamMat(tex),24,0);f.renderOrder=2;B.fm[vi]=f;ready++}
+  const f=batch(FPLANE,foamMat(tex),24,0);f.renderOrder=2;B.fm[vi]=f;
+  const rf=batch(B[LOW?'xlo':'lo'][vi].geometry,reflMat,60,1);rf.renderOrder=1;B.rf[vi]=rf;ready++}
 const LIST=[];for(let i=0;i<NV;i++)LIST.push([i,7001+i*7919]);
 try{const src="("+WGEN.toString()+")()",wk=new Worker(URL.createObjectURL(new Blob([src],{type:"application/javascript"})));
   wk.onmessage=e=>accept(e.data);wk.postMessage({list:LIST,res:RES})}
@@ -523,7 +559,8 @@ function update(){
     if(!FR.intersectsSphere(SP.set(PV.set(x,o.s*.6,z),o.s*1.5)))continue;
     stats.rocks++;
     if(ratio>.32){put(B.hi[o.vi],o,x,z);stats.hi++}else if(ratio>.085)put(B.lo[o.vi],o,x,z);else put(B.xlo[o.vi],o,x,z);
-    if(dd-o.s*1.3<SURF_D&&ratio>.04)put(B.fm[o.vi],o,x,z)}}
+    if(dd-o.s*1.3<SURF_D&&ratio>.04)put(B.fm[o.vi],o,x,z);
+    put(B.rf[o.vi],o,x,z)}}
   for(const k in B)for(const im of B[k])if(im){im.visible=im.count>0;if(im.count){im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true}}
   UNI.uSunK.value=.35+Kt.intensity*.42;
 }
