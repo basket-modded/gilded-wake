@@ -61,3 +61,17 @@ AJ=open('/home/claude/mp/aim.js').read()
 one3("function updateArc(){",AJ+"\nfunction updateArc(){")
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('aim ok')
+
+# ---------------- aim: smooth range changes ----------------
+s=open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html').read()
+def one4(a,b):
+    global s
+    assert s.count(a)==1,a[:80]
+    s=s.replace(a,b)
+one4("function updateArc(){const e=\"captain\"===pn&&\"play\"===dn&&!vn&&!Gn;","function updateArc(){const e=\"captain\"===pn&&\"play\"===dn&&!vn&&!Gn;const _now=performance.now(),_dt=Math.min(.1,(_now-(updateArc.t||_now))/1e3);updateArc.t=_now;")
+one4("const t=aimSide(),n=ro(),o=io(t)","const t=aimSide(),_tg=ro();updateArc.el=updateArc.el==null||!e?_tg:updateArc.el+(_tg-updateArc.el)*Math.min(1,_dt*10);const n=updateArc.el,o=io(t)")
+one4("!(a.y<.2));i++);Yo.setDrawRange(0,i)","!(a.y<.2));i++);let _n=i;if(i<No-1){const _p=3*i,_py=Uo[_p+1],_k=(_py-.2)/Math.max(1e-4,_py-a.y);a.set(Uo[_p]+(a.x-Uo[_p])*_k,.2,Uo[_p+2]+(a.z-Uo[_p+2])*_k);Uo[_p+3]=a.x;Uo[_p+4]=a.y;Uo[_p+5]=a.z;_n=i+2}Yo.setDrawRange(0,i)")
+one4("AIM.set(i,a,o,t)}","AIM.set(_n,a,o,t)}")
+one4("e(\"#range\").textContent=`~${Math.round(Ko(ro()))} m`","e(\"#range\").textContent=`~${Math.round(Ko(updateArc.el??ro()))} m`")
+open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
+print('smooth ok')
