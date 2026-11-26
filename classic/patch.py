@@ -18,7 +18,7 @@ one('function placeTarget(e){const t=a(0,s),n=a(90,240);e.x=wt.x+Math.cos(t)*n,e
     'function placeTarget(e){for(let k=0;k<12;k++){const t=a(0,s),n=a(90,240);if(e.x=wt.x+Math.cos(t)*n,e.z=wt.y+Math.sin(t)*n,!RKS.inRock(e.x,e.z,30))break}e.alive=!0')
 # debug hook only with ?debug
 one('const i=updateShip(s);RKS.collide(s);','const i=updateShip(s);RKS.collide(s);if(DBG)DBG(s);')
-s=s.replace(';'+rk, ';'+rk+'\nconst DBG=/[?&]debug/.test(location.search)?(dt)=>{window.__rk={RKS,wt,get h(){return Mn},set h(q){Mn=q},get sp(){return Rn},set sp(q){Rn=q},get hp(){return yn},get mode(){return dn},cam:v,ren:f,renderer:f,get wake(){return WAKE},get orbit(){return fn},get ft(){return ft},get jo(){return jo},get gull(){return GULL}}}:null;\n',1)
+s=s.replace(';'+rk, ';'+rk+'\nconst DBG=/[?&]debug/.test(location.search)?(dt)=>{window.__rk={RKS,wt,get h(){return Mn},set h(q){Mn=q},get sp(){return Rn},set sp(q){Rn=q},get hp(){return yn},get mode(){return dn},cam:v,ren:f,renderer:f,get wake(){return WAKE},get orbit(){return fn},get ft(){return ft},get jo(){return jo},get gull(){return GULL},get ship(){return {pe,se,re,ie,fe}}}}:null;\n',1)
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('ok',len(s))
 
@@ -97,3 +97,6 @@ one5('<div class="chips" style="margin-top:8px"><span>Best with headphones · A/
      '<div class="chips" style="margin-top:8px"><span>Best with headphones · A/D steer · W/S sails · click to fire</span></div>\n  <div class="chips" style="margin-top:6px;opacity:.55;font-size:11px"><span>Seagull model: “Seagull” by <a href="https://sketchfab.com/Dayvable" target="_blank" rel="noopener" style="color:inherit">Dayvable</a>, <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener" style="color:inherit">CC BY 4.0</a></span></div>')
 open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
 print('gull ok')
+
+# ---------------- deck: bell, lanterns, cabin interior ----------------
+exec(open('/home/claude/mp/deck_patch.py').read())
