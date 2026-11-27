@@ -115,3 +115,12 @@ exec(open('/home/claude/mp/vox_patch.py').read())
 
 # ---------------- bowsprit, lanterns, shadows ----------------
 exec(open('/home/claude/mp/fix_patch.py').read())
+
+# ---------------- visible build tag ----------------
+s=open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html').read()
+import re,time
+TAG='vox-3'
+assert s.count('Seagull model:')==1
+s=s.replace('Seagull model:','Build '+TAG+' · Seagull model:')
+open(sys.argv[1] if len(sys.argv)>1 else '/home/claude/mp/classic2.html','w').write(s)
+print('tag ok')
