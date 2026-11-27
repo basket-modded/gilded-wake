@@ -112,3 +112,6 @@ exec(open('/home/claude/mp/pix_patch.py').read())
 
 # ---------------- voxel ship ----------------
 exec(open('/home/claude/mp/vox_patch.py').read())
+
+# ---------------- bowsprit, lanterns, shadows ----------------
+exec(open('/home/claude/mp/fix_patch.py').read())
