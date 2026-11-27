@@ -4,11 +4,13 @@
    which keeps the triangle count low. Textures land exactly one texel per voxel face through the pixel shader.
    Rigging lines become 1-voxel ropes; the loose hanging ropes are re-voxelised as they sway. */
 const VOX=(()=>{
-const h=PIXS,O=8192,Q=16384,key=(x,y,z)=>((x+O)*Q+(y+O))*Q+(z+O);
+const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]],h=PIXS,O=8192,Q=16384,key=(x,y,z)=>((x+O)*Q+(y+O))*Q+(z+O);
 const dec=k=>{const z=k%Q,t=(k-z)/Q,y=t%Q,x=(t-y)/Q;return[x-O,y-O,z-O]};
 const cell=v=>Math.floor(v/h);
-function pt(M,x,y,z,c){const k=key(cell(x),cell(y),cell(z));M.has(k)||M.set(k,c)}
-function tri(M,a,b,c,col){const l=Math.max(Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]),Math.hypot(c[0]-a[0],c[1]-a[1],c[2]-a[2]),Math.hypot(c[0]-b[0],c[1]-b[1],c[2]-b[2]));
+let INF=null,NX=0,NY=0,NZ=0,FLIP=!1,THIN=!1;
+function pt(M,x,y,z,c){const cx=cell(x),cy=cell(y),cz=cell(z),k=key(cx,cy,cz);M.has(k)||M.set(k,c);
+  if(INF){const dx=x-(cx+.5)*h,dy=y-(cy+.5)*h,dz=z-(cz+.5)*h,d=dx*dx+dy*dy+dz*dz,q=INF.get(k);if(!q||d<q[0])INF.set(k,[d,x,y,z,NX,NY,NZ])}}
+function tri(M,a,b,c,col){if(INF){const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];NX=uy*vz-uz*vy;NY=uz*vx-ux*vz;NZ=ux*vy-uy*vx;const l=(Math.hypot(NX,NY,NZ)||1)*(FLIP?-1:1);NX/=l;NY/=l;NZ/=l}const l=Math.max(Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]),Math.hypot(c[0]-a[0],c[1]-a[1],c[2]-a[2]),Math.hypot(c[0]-b[0],c[1]-b[1],c[2]-b[2]));
   const n=Math.max(1,Math.ceil(l/(h*.45)));
   for(let i=0;i<=n;i++)for(let j=0;j<=n-i;j++){const u=i/n,v=j/n;pt(M,a[0]+(b[0]-a[0])*u+(c[0]-a[0])*v,a[1]+(b[1]-a[1])*u+(c[1]-a[1])*v,a[2]+(b[2]-a[2])*u+(c[2]-a[2])*v,col)}}
 function seg(M,a,b,col){const n=Math.max(1,Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])/(h*.45)));
@@ -24,13 +26,31 @@ function close(M){const add=[];
       for(const q of path)add.push(key(x+q[0],y+q[1],z+q[2]),c)}}
   for(let i=0;i<add.length;i+=2)M.has(add[i])||M.set(add[i],add[i+1]);return M}
 /* surface of a geometry -> voxels; vertex colours become a small palette */
-function fromGeo(g,T){const P=g.attributes.position,C=g.attributes.color,I=g.index,M=new Map,pal=[],pk=new Map;
+function fromGeo(g,T,solid){INF=solid?new Map:null;let SV=0;const P=g.attributes.position,C=g.attributes.color,I=g.index,M=new Map,pal=[],pk=new Map;
   const colOf=i=>{if(!C)return 0;const r=C.getX(i),gg=C.getY(i),b=C.getZ(i),k=Math.round(r*40)+","+Math.round(gg*40)+","+Math.round(b*40);let c=pk.get(k);if(c==null){c=pal.length;pal.push([r,gg,b]);pk.set(k,c)}return c};
   const n=I?I.count:P.count,tx=T?T[0]:0,ty=T?T[1]:0,tz=T?T[2]:0,V=i=>[P.getX(i)+tx,P.getY(i)+ty,P.getZ(i)+tz];
+  if(INF)for(let t=0;t<n;t+=3){const a=V(I?I.getX(t):t),b=V(I?I.getX(t+1):t+1),c=V(I?I.getX(t+2):t+2);SV+=a[0]*(b[1]*c[2]-b[2]*c[1])-a[1]*(b[0]*c[2]-b[2]*c[0])+a[2]*(b[0]*c[1]-b[1]*c[0])}
+  FLIP=SV<0;
   for(let t=0;t<n;t+=3){const i0=I?I.getX(t):t,i1=I?I.getX(t+1):t+1,i2=I?I.getX(t+2):t+2;tri(M,V(i0),V(i1),V(i2),colOf(i0))}
-  return{M:close(M),pal:C?pal:null}}
+  const inf=INF;INF=null;THIN=!1;const S=inf?solidify(M,inf):M,thin=THIN;return{M:inf&&!thin?S:close(S),pal:C?pal:null,thin}}
+/* solid voxels: fill the inside of closed shapes, then keep a surface cube only if its centre is inside the shape,
+   so round things come out as clean, even voxel curves; thin parts (hoops, chains, ropes) stay one cube thick */
+function solidify(M,inf){let x0=1e9,y0=1e9,z0=1e9,x1=-1e9,y1=-1e9,z1=-1e9;
+  for(const k of M.keys()){const[x,y,z]=dec(k);x<x0&&(x0=x);y<y0&&(y0=y);z<z0&&(z0=z);x>x1&&(x1=x);y>y1&&(y1=y);z>z1&&(z1=z)}
+  x0--;y0--;z0--;x1++;y1++;z1++;const W=x1-x0+1,H=y1-y0+1,D=z1-z0+1;if(W*H*D>3e6)return M;
+  const id=(x,y,z)=>((x-x0)*H+(y-y0))*D+(z-z0),G=new Uint8Array(W*H*D);
+  for(const k of M.keys()){const[x,y,z]=dec(k);G[id(x,y,z)]=1}
+  const st=[0];G[0]=2;while(st.length){const i=st.pop(),z=i%D,t=(i-z)/D,y=t%H,x=(t-y)/H;
+    for(const[a,b,c]of[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){const X=x+a,Y=y+b,Z=z+c;if(X<0||Y<0||Z<0||X>=W||Y>=H||Z>=D)continue;const j=(X*H+Y)*D+Z;if(!G[j]){G[j]=2;st.push(j)}}}
+  const R=new Map,c0=M.values().next().value||0;
+  for(let i=0;i<G.length;i++)if(!G[i]){const z=i%D,t=(i-z)/D,y=t%H,x=(t-y)/H;R.set(key(x+x0,y+y0,z+z0),c0)}
+  const nin=R.size;const out=[];
+  for(const[k,c]of M){const q=inf.get(k),[x,y,z]=dec(k);
+    if(q&&((x+.5)*h-q[1])*q[4]+((y+.5)*h-q[2])*q[5]+((z+.5)*h-q[3])*q[6]<=0)R.set(k,c);else out.push(k,c)}
+  THIN=R.size*4<M.size;if(THIN)R.clear();
+  for(let i=0;i<out.length;i+=2){const[x,y,z]=dec(out[i]);let touch=!1;for(const D6 of DIRS)if(R.has(key(x+D6[0],y+D6[1],z+D6[2]))){touch=!0;break}touch||R.set(out[i],out[i+1])}
+  return R}
 /* exposed faces, merged into the biggest rectangles per plane and colour */
-const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 function mesh(M,pal,keep,occ,T,inset=0){const G=new Map,has=occ||(k=>M.has(k)),ox=T?T[0]:0,oy=T?T[1]:0,oz=T?T[2]:0;
   for(const[k,c]of M){const[x,y,z]=dec(k);
     for(let d=0;d<6;d++){const D=DIRS[d];if(has(key(x+D[0],y+D[1],z+D[2])))continue;if(keep&&!keep(d,x,y,z))continue;
@@ -64,13 +84,19 @@ function run(){if(done)return;done=1;const t0=performance.now(),cache=new Map,gr
     const e=o.matrix.elements,pure=Math.abs(e[0]-1)+Math.abs(e[5]-1)+Math.abs(e[10]-1)+Math.abs(e[1])+Math.abs(e[2])+Math.abs(e[4])+Math.abs(e[6])+Math.abs(e[8])+Math.abs(e[9])<1e-5;
     const gk=pure?o.parent.uuid:o.uuid;let G=groups.get(gk);if(!G){G=[];groups.set(gk,G)}G.push([o,pure?[e[12],e[13],e[14]]:null])});
   for(const G of groups.values()){
-    /* hull first, opaque before see-through, so every cell has exactly one owner */
-    G.sort((p,q)=>(q[0]===he)-(p[0]===he)||(!!p[0].material.transparent)-(!!q[0].material.transparent));
+    /* big parts first, small detail last: where parts share a cell the smaller, more detailed part wins it
+       (iron hoops on a barrel, brackets on a wall). See-through parts only fill cells nobody else owns. */
+    const vol=o=>{const g=o.geometry;g.boundingBox||g.computeBoundingBox();const z=g.boundingBox.getSize(new THREE.Vector3);return Math.max(z.x,.01)*Math.max(z.y,.01)*Math.max(z.z,.01)};
+    G.sort((p,q)=>(!!p[0].material.transparent)-(!!q[0].material.transparent)||vol(q[0])-vol(p[0]));
     const sig=G.map(([o,T])=>o.geometry.uuid+(T?T.map(v=>v.toFixed(3)).join(","):"")).join("|");let out=cache.get(sig);
-    if(!out){const U=new Map,parts=[];
-      for(const[o,T]of G){const{M,pal}=fromGeo(o.geometry,T),own=new Map,tr=!!o.material.transparent;
-        for(const[k,c]of M)if(!U.has(k)){own.set(k,c);tr||U.set(k,1)}
-        parts.push([own,pal,tr,o===he?HULLK:o===Me.deck?DECKK:null,T])}
+    if(!out){const U=new Map,maps=[];
+      const SOL=!(G[0][0].parent===pe&&G[0][1]);
+      G.forEach(([o,T],i)=>{const r=fromGeo(o.geometry,T,SOL),tr=!!o.material.transparent;maps.push(r);if(tr)return;
+        if(r.thin&&U.size){for(const k of[...r.M.keys()]){if(U.has(k))continue;const[x,y,z]=dec(k);let adj=!1;for(let a=-2;a<=2&&!adj;a++)for(let b=-2;b<=2&&!adj;b++)for(let c=-2;c<=2;c++)if(U.has(key(x+a,y+b,z+c))){adj=!0;break}adj&&r.M.delete(k)}}
+        for(const k of r.M.keys())U.set(k,i)});
+      const parts=G.map(([o,T],i)=>{const{M,pal}=maps[i],own=new Map,tr=!!o.material.transparent;
+        for(const[k,c]of M)if(tr?!U.has(k):U.get(k)===i)own.set(k,c);
+        return[own,pal,tr,o===he?HULLK:o===Me.deck?DECKK:null,T]});
       if(G[0][0].parent===pe&&G[0][1])PEU=U;
       const ins=G[0][0].parent===pe&&G[0][1]?0:.004+(G[0][0].id%7)*.0025;
       out=parts.map(([own,pal,tr,keep,T])=>mesh(own,pal,keep,tr?(k=>U.has(k)||own.has(k)):(k=>U.has(k)),T,ins));cache.set(sig,out)}
@@ -94,5 +120,5 @@ const loose=(()=>{const CAP=3000,g=new THREE.BufferGeometry,pos=new Float32Array
     g.setDrawRange(0,v);g.attributes.position.needsUpdate=g.attributes.normal.needsUpdate=!0}
   return{m,update}})();
 function swap(v){for(const[o,g0,g1]of LIST)o.geometry=v?g1:g0}
-return{run,swap,frame:()=>loose.update(),get rig(){return rig},stats};
+return{dec,key,run,swap,frame:()=>loose.update(),get rig(){return rig},stats};
 })();
