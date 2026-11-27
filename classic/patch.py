@@ -106,3 +106,6 @@ exec(open('/home/claude/mp/seam_patch.py').read())
 
 # ---------------- player character ----------------
 exec(open('/home/claude/mp/avatar_patch.py').read())
+
+# ---------------- pixel world, windows, clutter, thick sails ----------------
+exec(open('/home/claude/mp/pix_patch.py').read())

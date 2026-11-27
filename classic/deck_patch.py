@@ -27,29 +27,6 @@ _.linen=new THREE.MeshStandardMaterial({color:14077362,roughness:.95});
 _.wool=new THREE.MeshStandardMaterial({map:clothTex("wool"),roughness:.97});
 _.rug=new THREE.MeshStandardMaterial({map:clothTex("rug"),roughness:1});
 _.coat=new THREE.MeshStandardMaterial({color:1844278,roughness:.9});
-/* leaded window glass: reflects the sky outside, shows a lamp-lit cabin behind; from inside you see the sea */
-const WU={uSunDir:{value:g},uSunI:{value:1}};
-const WV=`varying vec2 vUv;varying vec3 vW,vN;void main(){vUv=uv;vec4 w=modelMatrix*vec4(position,1.0);vW=w.xyz;vN=normalize(mat3(modelMatrix)*normal);gl_Position=projectionMatrix*viewMatrix*w;}`;
-const WF=`varying vec2 vUv;varying vec3 vW,vN;
-  float panes(vec2 uv){vec2 g=fract(uv*vec2(3.0,2.0));return step(0.07,g.x)*step(g.x,0.93)*step(0.08,g.y)*step(g.y,0.92);}`;
-_.window=new THREE.ShaderMaterial({uniforms:WU,vertexShader:WV,fragmentShader:b+WF+`
-  void main(){vec3 V=normalize(cameraPosition-vW),N=normalize(vN);if(dot(N,V)<0.0)N=-N;
-    vec3 R=reflect(-V,N);R.y=abs(R.y)*0.7+0.03;
-    float wob=sin(vUv.x*37.0+vUv.y*11.0)*0.05+sin(vUv.y*29.0)*0.03;
-    vec3 refl=skyBase(normalize(R+vec3(wob,0.0,wob)));
-    float fr=clamp(0.22+0.78*pow(1.0-max(dot(N,V),0.0),3.0)+wob,0.0,1.0);
-    vec3 warm=vec3(1.0,0.6,0.28)*(0.22+0.78*(1.0-uSunI));
-    vec3 col=mix(warm*0.55,refl*0.8,fr);
-    col=mix(vec3(0.04,0.03,0.02),col,panes(vUv));
-    gl_FragColor=vec4(col,1.0);`+S+"}"});
-_.windowIn=new THREE.ShaderMaterial({uniforms:WU,vertexShader:WV,fragmentShader:b+WF+`
-  void main(){vec3 d=normalize(vW-cameraPosition);
-    float wob=sin(vUv.x*37.0+vUv.y*11.0)*0.04;d=normalize(d+vec3(wob,0.0,wob));
-    vec3 sky=skyBase(vec3(d.x,max(d.y,0.02),d.z));
-    vec3 sea=mix(vec3(0.02,0.07,0.09)*(0.3+0.7*uSunI),skyBase(normalize(vec3(d.x,0.02,d.z)))*0.55,exp(d.y*9.0));
-    vec3 col=d.y>0.0?sky:sea;col*=0.9;
-    col=mix(vec3(0.03,0.02,0.015),col,panes(vUv));
-    gl_FragColor=vec4(col,1.0);`+S+"}"});
 '''
 one("_.sail.shadowSide=THREE.DoubleSide;","_.sail.shadowSide=THREE.DoubleSide;"+A)
 
@@ -98,18 +75,9 @@ one('put2(meshOf([xf(box(.14,2.3,.14),-.55,se+1.15,-11.4),xf(box(.14,2.3,.14),.5
  'put2(meshOf([xf(box(.14,2.3,.14),-.55,se+1.15,-11.4),xf(box(.14,2.3,.14),.55,se+1.15,-11.4),xf(box(1.5,.16,.2),0,se+2.3,-11.4),xf(box(1.3,.12,.5),0,se+.06,-11.4),rodG(-.55,se+1.55,-11.4,-.22,se+2.22,-11.4,.045,6),rodG(.55,se+1.55,-11.4,.22,se+2.22,-11.4,.045,6),xf(box(.16,.06,.6),-.55,se+.15,-11.4),xf(box(.16,.06,.6),.55,se+.15,-11.4)],_.dark))')
 
 # ---- D. cabin interior: bunk, rug, coat hooks ----
-one('te("red",xf(box(1.9,.35,.9),2.4,se+.25,9.3)),te("paper",xf(box(1.8,.12,.8),2.4,se+.47,9.3)),',
- 'te("med",xf(box(1.95,.2,.95),2.4,se+.2,9.3)),te("dark",xf(box(1.95,.1,.06),2.4,se+.36,8.84)),te("dark",xf(box(1.95,.1,.06),2.4,se+.36,9.76)),te("dark",xf(box(.07,.78,.99),3.37,se+.39,9.3)),te("dark",xf(box(.07,.46,.99),1.43,se+.23,9.3)),te("dark",xf(box(.07,.05,1.05),3.37,se+.8,9.3)),'
- +''.join('te("dark",xf(box(.07,.12,.07),%s,se+.06,%s)),'%(x,z) for x in ('1.47','3.33') for z in ('8.86','9.74'))
- +'te("linen",xf(box(1.82,.13,.86),2.42,se+.37,9.3)),te("wool",xf(box(1.25,.045,.95),1.98,se+.455,9.3)),te("wool",xf(box(1.25,.26,.025),1.98,se+.33,9.802)),te("wool",xf(box(1.25,.26,.025),1.98,se+.33,8.798)),te("linen",xf(box(.14,.05,.92),2.66,se+.475,9.3)),te("linen",xf(new THREE.SphereGeometry(.3,14,8),3.02,se+.5,9.3,0,0,0,.5,.2,1.2)),'
- +'te("rug",xf(new THREE.PlaneGeometry(1.7,2.3),-1.3,se+.012,10.05,-Math.PI/2,0,Math.PI/2)),'
- +'te("dark",xf(box(.95,.09,.035),2.55,3.95,ie+.075)),'
- +''.join('te("iron",rodG(%s,3.93,ie+.09,%s,3.99,ie+.2,.012)),te("iron",new THREE.SphereGeometry(.018,6,4).translate(%s,3.995,ie+.205)),'%(x,x,x) for x in ('2.22','2.55','2.88'))
- +'te("felt",xf(cyl(.2,.23,.035,3),2.22,3.86,ie+.25,1.2,0,.15)),te("felt",xf(cyl(.105,.12,.13,12),2.22,3.9,ie+.17,1.2,0,.15)),te("brass",xf(new THREE.TorusGeometry(.05,.008,4,10),2.22,3.84,ie+.33,1.2,0,.15)),'
- +'te("coat",xf(cyl(.15,.26,.95,10),2.88,3.48,ie+.19,0,0,0,1,1,.42)),te("coat",xf(cyl(.1,.16,.12,10),2.88,3.97,ie+.17,0,0,0,1,1,.5)),te("brass",new THREE.SphereGeometry(.018,6,4).translate(2.88,3.62,ie+.27)),te("brass",new THREE.SphereGeometry(.018,6,4).translate(2.88,3.42,ie+.275)),')
+one('te("red",xf(box(1.9,.35,.9),2.4,se+.25,9.3)),te("paper",xf(box(1.8,.12,.8),2.4,se+.47,9.3)),','')
 # collision for the bunk footprint stays as before; rug and hooks are walk-through.
 
 # ---- E. window glass follows the sun ----
-one("ft.uWake.value=WAKE.tex;","ft.uWake.value=WAKE.tex;_.window.uniforms.uSunI=_.windowIn.uniforms.uSunI=gt.uniforms.uSunI;")
 open(P,'w').write(s)
 print('deck ok')
